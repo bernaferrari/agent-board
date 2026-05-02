@@ -59,6 +59,7 @@ import { InstanceHttpApi, RootHttpApi } from "./api"
 import { PublicApi } from "./public"
 import { authorizationLayer, authorizationRouterMiddleware } from "./middleware/authorization"
 import { EventApi, eventHandlers } from "./event"
+import { agentBoardRoute } from "./handlers/agentboard"
 import { configHandlers } from "./handlers/config"
 import { controlHandlers } from "./handlers/control"
 import { experimentalHandlers } from "./handlers/experimental"
@@ -146,7 +147,7 @@ const instanceApiRoutes = HttpApiBuilder.layer(InstanceHttpApi).pipe(
   ]),
 )
 
-const rawInstanceRoutes = Layer.mergeAll(ptyConnectRoute).pipe(Layer.provide(instanceRouterLayer))
+const rawInstanceRoutes = Layer.mergeAll(ptyConnectRoute, agentBoardRoute).pipe(Layer.provide(instanceRouterLayer))
 const instanceRoutes = Layer.mergeAll(rawInstanceRoutes, instanceApiRoutes).pipe(
   Layer.provide([
     httpApiAuthLayer,

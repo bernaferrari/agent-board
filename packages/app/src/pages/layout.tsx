@@ -1273,80 +1273,18 @@ export default function Layout(props: ParentProps) {
     if (!directory) return
     const root = projectRoot(directory)
     server.projects.touch(root)
-    const project = layout.projects.list().find((item) => item.worktree === root)
-    let dirs = project
-      ? effectiveWorkspaceOrder(root, [root, ...(project.sandboxes ?? [])], store.workspaceOrder[root])
-      : [root]
-    const canOpen = (value: string | undefined) => {
-      if (!value) return false
-      return dirs.some((item) => pathKey(item) === pathKey(value))
-    }
-    const refreshDirs = async (target?: string) => {
-      if (!target || target === root || canOpen(target)) return canOpen(target)
-      const listed = await globalSDK.client.worktree
-        .list({ directory: root })
-        .then((x) => x.data ?? [])
-        .catch(() => [] as string[])
-      dirs = effectiveWorkspaceOrder(root, [root, ...listed], store.workspaceOrder[root])
-      return canOpen(target)
-    }
-    const openSession = async (target: { directory: string; id: string }) => {
-      if (!canOpen(target.directory)) return false
-      const [data] = globalSync.child(target.directory, { bootstrap: false })
-      if (data.session.some((item) => item.id === target.id)) {
-        setStore("lastProjectSession", root, { directory: target.directory, id: target.id, at: Date.now() })
-        navigateWithSidebarReset(`/${base64Encode(target.directory)}/session/${target.id}`)
-        return true
-      }
-      const resolved = await globalSDK.client.session
-        .get({ sessionID: target.id })
-        .then((x) => x.data)
-        .catch(() => undefined)
-      if (!resolved?.directory) return false
-      if (!canOpen(resolved.directory)) return false
-      setStore("lastProjectSession", root, { directory: resolved.directory, id: resolved.id, at: Date.now() })
-      navigateWithSidebarReset(`/${base64Encode(resolved.directory)}/session/${resolved.id}`)
-      return true
-    }
-
-    const projectSession = store.lastProjectSession[root]
-    if (projectSession?.id) {
-      await refreshDirs(projectSession.directory)
-      const opened = await openSession(projectSession)
-      if (opened) return
-      clearLastProjectSession(root)
-    }
-
-    const latest = latestRootSession(
-      dirs.map((item) => globalSync.child(item, { bootstrap: false })[0]),
-      Date.now(),
-    )
-    if (latest && (await openSession(latest))) {
-      return
-    }
-
-    const fetched = latestRootSession(
-      await Promise.all(
-        dirs.map(async (item) => ({
-          path: { directory: item },
-          session: await globalSDK.client.session
-            .list({ directory: item })
-            .then((x) => x.data ?? [])
-            .catch(() => []),
-        })),
-      ),
-      Date.now(),
-    )
-    if (fetched && (await openSession(fetched))) {
-      return
-    }
-
-    navigateWithSidebarReset(`/${base64Encode(root)}/session`)
+    navigateWithSidebarReset(`/${base64Encode(root)}/board`)
   }
 
   function navigateToSession(session: Session | undefined) {
     if (!session) return
     navigateWithSidebarReset(`/${base64Encode(session.directory)}/session/${session.id}`)
+  }
+
+  function navigateToBoard(directory: string | undefined) {
+    if (!directory) return
+    server.projects.touch(projectRoot(directory))
+    navigateWithSidebarReset(`/${base64Encode(directory)}/board`)
   }
 
   function openProject(directory: string, navigate = true) {
@@ -2061,6 +1999,7 @@ export default function Layout(props: ParentProps) {
       return item.vcs === "git" || layout.sidebar.workspaces(item.worktree)()
     })
     const homedir = createMemo(() => globalSync.data.path.home)
+    const boardActive = createMemo(() => params.dir === slug() && location.pathname.endsWith("/board"))
 
     return (
       <div
@@ -2206,7 +2145,16 @@ export default function Layout(props: ParentProps) {
                   when={workspacesEnabled()}
                   fallback={
                     <>
-                      <div class="shrink-0 py-4">
+                      <div class="shrink-0 py-4 flex flex-col gap-2">
+                        <Button
+                          size="large"
+                          icon="checklist"
+                          variant={boardActive() ? "primary" : "secondary"}
+                          class="w-full"
+                          onClick={() => navigateToBoard(worktree())}
+                        >
+                          AgentBoard
+                        </Button>
                         <Button
                           size="large"
                           icon="new-session"
@@ -2232,7 +2180,16 @@ export default function Layout(props: ParentProps) {
                   }
                 >
                   <>
-                    <div class="shrink-0 py-4">
+                    <div class="shrink-0 py-4 flex flex-col gap-2">
+                      <Button
+                        size="large"
+                        icon="checklist"
+                        variant={boardActive() ? "primary" : "secondary"}
+                        class="w-full"
+                        onClick={() => navigateToBoard(worktree())}
+                      >
+                        AgentBoard
+                      </Button>
                       <Button
                         size="large"
                         icon="plus-small"

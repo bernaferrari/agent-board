@@ -333,6 +333,49 @@ export const NewSessionItem = (props: {
   )
 }
 
+export const AgentBoardItem = (props: {
+  slug: string
+  mobile?: boolean
+  dense?: boolean
+  sidebarExpanded: Accessor<boolean>
+  clearHoverProjectSoon: () => void
+}): JSX.Element => {
+  const layout = useLayout()
+  const label = "AgentBoard"
+  const tooltip = () => props.mobile || !props.sidebarExpanded()
+  const item = (
+    <A
+      href={`/${props.slug}/board`}
+      end
+      class={`flex items-center gap-2 min-w-0 w-full text-left focus:outline-none ${props.dense ? "py-0.5" : "py-1"}`}
+      onClick={() => {
+        if (layout.sidebar.opened()) return
+        props.clearHoverProjectSoon()
+      }}
+    >
+      <div class="shrink-0 size-6 flex items-center justify-center">
+        <Icon name="checklist" size="small" class="text-icon-weak" />
+      </div>
+      <span class="text-14-regular text-text-strong min-w-0 flex-1 truncate">{label}</span>
+    </A>
+  )
+
+  return (
+    <div class="group/session relative w-full min-w-0 rounded-md cursor-default transition-colors pl-2 pr-3 hover:bg-surface-raised-base-hover [&:has(:focus-visible)]:bg-surface-raised-base-hover has-[.active]:bg-surface-base-active">
+      <Show
+        when={!tooltip()}
+        fallback={
+          <Tooltip placement={props.mobile ? "bottom" : "right"} value={label} gutter={10} class="min-w-0 w-full">
+            {item}
+          </Tooltip>
+        }
+      >
+        {item}
+      </Show>
+    </div>
+  )
+}
+
 export const SessionSkeleton = (props: { count?: number }): JSX.Element => {
   const items = Array.from({ length: props.count ?? 4 }, (_, index) => index)
   return (
