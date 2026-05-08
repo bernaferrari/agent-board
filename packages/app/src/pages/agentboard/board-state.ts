@@ -34,6 +34,13 @@ export function canMoveCardTo(card: AgentBoardCard, target: AgentBoardColumnID, 
   return { ok: true, reason: undefined }
 }
 
+function issueStatusForColumn(column: AgentBoardColumnID) {
+  if (column === "ready") return "open"
+  if (column === "running" || column === "needs_review") return "in_progress"
+  if (column === "closed") return "closed"
+  return undefined
+}
+
 export function moveCardOnBoard(
   board: AgentBoardBoard,
   issueID: string,
@@ -51,7 +58,12 @@ export function moveCardOnBoard(
   const column = nextColumns.find((item) => item.id === targetColumn)
   if (!column) return board
   const insertAt = beforeIssueID ? column.cards.findIndex((card) => card.issue.id === beforeIssueID) : -1
-  const nextCard = { ...moved, column: targetColumn }
+  const nextStatus = issueStatusForColumn(targetColumn)
+  const nextCard = {
+    ...moved,
+    column: targetColumn,
+    issue: nextStatus ? { ...moved.issue, status: nextStatus } : moved.issue,
+  }
   if (insertAt === -1) {
     column.cards = [...column.cards, nextCard]
   } else {

@@ -64,6 +64,7 @@ describe("agentboard board state", () => {
     const moved = moveCardOnBoard(board(), "AB-1", "running")
 
     expect(findCard(moved, "AB-1")?.column).toBe("running")
+    expect(findCard(moved, "AB-1")?.issue.status).toBe("in_progress")
     expect(moved.columns.find((column) => column.id === "ready")?.cards.map((card) => card.issue.id)).toEqual(["AB-2"])
     expect(moved.columns.find((column) => column.id === "running")?.cards.map((card) => card.issue.id)).toEqual([
       "AB-1",
@@ -73,6 +74,7 @@ describe("agentboard board state", () => {
   test("reorders cards within a column", () => {
     const moved = moveCardOnBoard(board(), "AB-2", "ready", "AB-1")
 
+    expect(findCard(moved, "AB-2")?.issue.status).toBe("open")
     expect(moved.columns.find((column) => column.id === "ready")?.cards.map((card) => card.issue.id)).toEqual([
       "AB-2",
       "AB-1",

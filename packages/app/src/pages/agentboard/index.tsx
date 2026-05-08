@@ -1,4 +1,5 @@
 import { Button } from "@opencode-ai/ui/button"
+import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
 import { Icon, type IconProps } from "@opencode-ai/ui/icon"
 import { showToast } from "@opencode-ai/ui/toast"
 import { base64Encode } from "@opencode-ai/core/util/encode"
@@ -23,6 +24,7 @@ import {
   type AgentBoardBoard,
   type AgentBoardCard,
   type AgentBoardColumnID,
+  type AgentBoardDependency,
   type AgentBoardRunEvent,
   type BeadsIssue,
   createAgentBoardClient,
@@ -75,7 +77,7 @@ const EVENT_LABEL: Record<string, string> = {
   beads_status_updated: "Updated tracker status",
   session_created: "Opened a chat session",
   prompt_started: "Sent implementation prompt",
-  artifacts_collected: "Collected the work",
+  artifacts_collected: "Collected artifacts",
   needs_review: "Ready for review",
   request_changes: "Reviewer asked for changes",
   cancelled: "Run cancelled",
@@ -95,120 +97,120 @@ type EventTone = {
 const EVENT_TONE: Record<string, EventTone> = {
   queued: {
     icon: "arrow-right",
-    dot: "bg-[#58a6ff] text-[#0d1117]",
+    dot: "bg-[#dbeafe] text-[#0969da] ring-1 ring-inset ring-[#58a6ff]/45",
     halo: "ring-[#58a6ff]/20",
     line: "bg-[#58a6ff]/25",
-    badge: "bg-[#58a6ff]/10 text-[#79c0ff] ring-[#58a6ff]/30",
+    badge: "bg-[#58a6ff]/14 text-text-strong ring-[#58a6ff]/45",
   },
   lease_acquired: {
     icon: "shield",
-    dot: "bg-[#3fb950] text-[#0d1117]",
+    dot: "bg-[#dafbe1] text-[#1a7f37] ring-1 ring-inset ring-[#3fb950]/45",
     halo: "ring-[#3fb950]/20",
     line: "bg-[#3fb950]/25",
-    badge: "bg-[#238636]/15 text-[#7ee787] ring-[#3fb950]/30",
+    badge: "bg-[#238636]/14 text-text-strong ring-[#3fb950]/45",
   },
   beads_status_updated: {
     icon: "status",
-    dot: "bg-[#3fb950] text-[#0d1117]",
+    dot: "bg-[#dafbe1] text-[#1a7f37] ring-1 ring-inset ring-[#3fb950]/45",
     halo: "ring-[#3fb950]/20",
     line: "bg-[#3fb950]/25",
-    badge: "bg-[#238636]/15 text-[#7ee787] ring-[#3fb950]/30",
+    badge: "bg-[#238636]/14 text-text-strong ring-[#3fb950]/45",
   },
   session_created: {
     icon: "bubble-5",
-    dot: "bg-[#58a6ff] text-[#0d1117]",
+    dot: "bg-[#dbeafe] text-[#0969da] ring-1 ring-inset ring-[#58a6ff]/45",
     halo: "ring-[#58a6ff]/20",
     line: "bg-[#58a6ff]/25",
-    badge: "bg-[#58a6ff]/10 text-[#79c0ff] ring-[#58a6ff]/30",
+    badge: "bg-[#58a6ff]/14 text-text-strong ring-[#58a6ff]/45",
   },
   prompt_started: {
     icon: "brain",
-    dot: "bg-[#d29922] text-[#0d1117]",
+    dot: "bg-[#fff8c5] text-[#9a6700] ring-1 ring-inset ring-[#d29922]/45",
     halo: "ring-[#d29922]/20",
     line: "bg-[#d29922]/25",
-    badge: "bg-[#9e6a03]/15 text-[#f2cc60] ring-[#d29922]/30",
+    badge: "bg-[#9e6a03]/14 text-text-strong ring-[#d29922]/45",
   },
   artifacts_collected: {
     icon: "code-lines",
-    dot: "bg-[#a371f7] text-[#0d1117]",
+    dot: "bg-[#f3e8ff] text-[#8250df] ring-1 ring-inset ring-[#a371f7]/45",
     halo: "ring-[#a371f7]/20",
     line: "bg-[#a371f7]/25",
-    badge: "bg-[#8957e5]/15 text-[#d2a8ff] ring-[#a371f7]/30",
+    badge: "bg-[#8957e5]/14 text-text-strong ring-[#a371f7]/45",
   },
   needs_review: {
     icon: "review",
-    dot: "bg-[#58a6ff] text-[#0d1117]",
+    dot: "bg-[#dbeafe] text-[#0969da] ring-1 ring-inset ring-[#58a6ff]/45",
     halo: "ring-[#58a6ff]/20",
     line: "bg-[#58a6ff]/25",
-    badge: "bg-[#58a6ff]/10 text-[#79c0ff] ring-[#58a6ff]/30",
+    badge: "bg-[#58a6ff]/14 text-text-strong ring-[#58a6ff]/45",
   },
   request_changes: {
     icon: "arrow-undo-down",
-    dot: "bg-[#d29922] text-[#0d1117]",
+    dot: "bg-[#fff8c5] text-[#9a6700] ring-1 ring-inset ring-[#d29922]/45",
     halo: "ring-[#d29922]/20",
     line: "bg-[#d29922]/25",
-    badge: "bg-[#9e6a03]/15 text-[#f2cc60] ring-[#d29922]/30",
+    badge: "bg-[#9e6a03]/14 text-text-strong ring-[#d29922]/45",
   },
   cancelled: {
     icon: "circle-x",
-    dot: "bg-[#f85149] text-[#0d1117]",
+    dot: "bg-[#ffebe9] text-[#cf222e] ring-1 ring-inset ring-[#f85149]/45",
     halo: "ring-[#f85149]/20",
     line: "bg-[#f85149]/25",
-    badge: "bg-[#da3633]/15 text-[#ff7b72] ring-[#f85149]/30",
+    badge: "bg-[#da3633]/14 text-text-strong ring-[#f85149]/45",
   },
   done: {
     icon: "check",
-    dot: "bg-[#8957e5] text-[#0d1117]",
+    dot: "bg-[#f3e8ff] text-[#8250df] ring-1 ring-inset ring-[#a371f7]/45",
     halo: "ring-[#a371f7]/20",
     line: "bg-[#a371f7]/25",
-    badge: "bg-[#8957e5]/15 text-[#d2a8ff] ring-[#a371f7]/30",
+    badge: "bg-[#8957e5]/14 text-text-strong ring-[#a371f7]/45",
   },
   failed: {
     icon: "warning",
-    dot: "bg-[#f85149] text-[#0d1117]",
+    dot: "bg-[#ffebe9] text-[#cf222e] ring-1 ring-inset ring-[#f85149]/45",
     halo: "ring-[#f85149]/20",
     line: "bg-[#f85149]/25",
-    badge: "bg-[#da3633]/15 text-[#ff7b72] ring-[#f85149]/30",
+    badge: "bg-[#da3633]/14 text-text-strong ring-[#f85149]/45",
   },
   lease_released: {
     icon: "archive",
-    dot: "bg-surface-raised-strong text-text-strong",
+    dot: "bg-surface-raised-strong text-text-strong ring-1 ring-inset ring-border-base",
     halo: "ring-border-strong-base",
     line: "bg-border-weaker-base",
-    badge: "bg-surface-raised-base text-text-weak ring-border-weaker-base",
+    badge: "bg-surface-raised-base text-text-strong ring-border-base",
   },
   reconciled: {
     icon: "reset",
-    dot: "bg-[#58a6ff] text-[#0d1117]",
+    dot: "bg-[#dbeafe] text-[#0969da] ring-1 ring-inset ring-[#58a6ff]/45",
     halo: "ring-[#58a6ff]/20",
     line: "bg-[#58a6ff]/25",
-    badge: "bg-[#58a6ff]/10 text-[#79c0ff] ring-[#58a6ff]/30",
+    badge: "bg-[#58a6ff]/14 text-text-strong ring-[#58a6ff]/45",
   },
 }
 
 const DEFAULT_EVENT_TONE: EventTone = {
   icon: "dot-grid",
-  dot: "bg-surface-raised-strong text-text-strong",
+  dot: "bg-surface-raised-strong text-text-strong ring-1 ring-inset ring-border-base",
   halo: "ring-border-strong-base",
   line: "bg-border-weaker-base",
-  badge: "bg-surface-raised-base text-text-weak ring-border-weaker-base",
+  badge: "bg-surface-raised-base text-text-strong ring-border-base",
 }
 
 const PRIORITY_OPTIONS = [
   {
     value: 0,
     label: "P0",
-    tone: "bg-[#da3633]/10 text-[#ff7b72] ring-[#f85149]/35",
+    tone: "bg-[#da3633]/14 text-text-strong ring-[#f85149]/45",
   },
   {
     value: 1,
     label: "P1",
-    tone: "bg-[#bc4c00]/15 text-[#ffa657] ring-[#f0883e]/35",
+    tone: "bg-[#bc4c00]/14 text-text-strong ring-[#f0883e]/45",
   },
   {
     value: 2,
     label: "P2",
-    tone: "bg-[#9e6a03]/15 text-[#f2cc60] ring-[#d29922]/35",
+    tone: "bg-[#9e6a03]/14 text-text-strong ring-[#d29922]/45",
   },
   {
     value: 3,
@@ -233,6 +235,146 @@ function issueLabels(issue: BeadsIssue): string[] {
   const raw = issue.raw as { labels?: unknown; tags?: unknown }
   const source = Array.isArray(raw?.labels) ? raw.labels : Array.isArray(raw?.tags) ? raw.tags : []
   return source.filter((value): value is string => typeof value === "string" && value.length > 0)
+}
+
+function issueType(issue: BeadsIssue): string | undefined {
+  const raw = issue.raw as { issue_type?: unknown; type?: unknown }
+  const value =
+    typeof raw?.issue_type === "string"
+      ? raw.issue_type
+      : typeof raw?.type === "string"
+        ? raw.type
+        : undefined
+  return value?.toLowerCase()
+}
+
+type IssueTypeMeta = {
+  label: string
+  icon: IconProps["name"]
+  tone: string
+  iconClass: string
+}
+
+const ISSUE_TYPE_META: Record<string, IssueTypeMeta> = {
+  bug: {
+    label: "Bug",
+    icon: "warning",
+    tone: "bg-[#da3633]/14 text-text-strong ring-[#f85149]/45",
+    iconClass: "text-[#f85149]",
+  },
+  feature: {
+    label: "Feature",
+    icon: "plus",
+    tone: "bg-[#238636]/14 text-text-strong ring-[#3fb950]/45",
+    iconClass: "text-[#3fb950]",
+  },
+  task: {
+    label: "Task",
+    icon: "checklist",
+    tone: "bg-[#58a6ff]/14 text-text-strong ring-[#58a6ff]/45",
+    iconClass: "text-[#58a6ff]",
+  },
+  chore: {
+    label: "Chore",
+    icon: "edit",
+    tone: "bg-[#9e6a03]/14 text-text-strong ring-[#d29922]/45",
+    iconClass: "text-[#d29922]",
+  },
+  epic: {
+    label: "Epic",
+    icon: "branch",
+    tone: "bg-[#8957e5]/14 text-text-strong ring-[#a371f7]/45",
+    iconClass: "text-[#a371f7]",
+  },
+}
+
+function issueTypeMeta(issue: BeadsIssue): IssueTypeMeta | undefined {
+  const type = issueType(issue)
+  return type ? ISSUE_TYPE_META[type] : undefined
+}
+
+function readStringField(raw: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = raw[key]
+    if (typeof value === "string" && value.length > 0) return value
+  }
+  return undefined
+}
+
+function readIDArray(raw: Record<string, unknown>, keys: string[]): string[] {
+  const ids: string[] = []
+  for (const key of keys) {
+    const arr = raw[key]
+    if (!Array.isArray(arr)) continue
+    for (const item of arr) {
+      if (typeof item === "string" && item.length > 0) {
+        ids.push(item)
+      } else if (item && typeof item === "object" && "id" in item) {
+        const id = (item as { id?: unknown }).id
+        if (typeof id === "string" && id.length > 0) ids.push(id)
+      }
+    }
+  }
+  return ids
+}
+
+function buildEpicChildren(
+  dependencies: AgentBoardDependency[],
+  cards: AgentBoardCard[],
+  rootEpicID: string,
+): Set<string> {
+  const childMap = new Map<string, Set<string>>()
+  const addChild = (parent: string, child: string) => {
+    if (!parent || !child || parent === child) return
+    const set = childMap.get(parent) ?? new Set<string>()
+    set.add(child)
+    childMap.set(parent, set)
+  }
+  for (const dep of dependencies) {
+    if (dep.type !== "parent-child") continue
+    addChild(dep.toIssueID, dep.fromIssueID)
+  }
+  for (const card of cards) {
+    const raw = card.issue.raw
+    if (!raw || typeof raw !== "object") continue
+    const parentRef = readStringField(raw as Record<string, unknown>, [
+      "parent",
+      "parent_id",
+      "parent_issue",
+      "parent_issue_id",
+      "epic",
+      "epic_id",
+    ])
+    if (parentRef) addChild(parentRef, card.issue.id)
+    const childIDs = readIDArray(raw as Record<string, unknown>, [
+      "children",
+      "child_ids",
+      "child_issue_ids",
+      "subtasks",
+      "subtask_ids",
+      "dependents",
+    ])
+    for (const id of childIDs) addChild(card.issue.id, id)
+  }
+  const children = new Set<string>()
+  const queue = [rootEpicID]
+  while (queue.length > 0) {
+    const id = queue.shift()!
+    for (const child of childMap.get(id) ?? []) {
+      if (children.has(child) || child === rootEpicID) continue
+      children.add(child)
+      queue.push(child)
+    }
+  }
+  return children
+}
+
+type EpicSummary = {
+  id: string
+  title: string
+  childCount: number
+  closedCount: number
+  childIDs: Set<string>
 }
 const ADVANCEMENT: Partial<Record<AgentBoardColumnID, AgentBoardColumnID>> = {
   ready: "running",
@@ -265,41 +407,41 @@ type PendingCardDrag = {
 const COLUMN_ACCENT: Record<AgentBoardColumnID, ColumnAccent> = {
   blocked: {
     dot: "bg-[#f85149]",
-    text: "text-[#ff7b72]",
-    pill: "bg-[#da3633]/10 text-[#ff7b72] ring-[#f85149]/35",
+    text: "text-[#cf222e]",
+    pill: "bg-[#da3633]/14 text-[color-mix(in_oklch,#cf222e_62%,var(--text-strong))] ring-[#f85149]/45",
     ring: "ring-[#f85149]/35",
     glow: "shadow-xs-border-critical-base",
     drop: "bg-[#da3633]/10 ring-[#f85149]/30",
   },
   ready: {
     dot: "bg-[#3fb950]",
-    text: "text-[#7ee787]",
-    pill: "bg-[#238636]/15 text-[#7ee787] ring-[#3fb950]/35",
+    text: "text-[#1a7f37]",
+    pill: "bg-[#238636]/14 text-[color-mix(in_oklch,#1a7f37_62%,var(--text-strong))] ring-[#3fb950]/45",
     ring: "ring-[#3fb950]/35",
     glow: "shadow-xs-border-base",
     drop: "bg-[#238636]/10 ring-[#3fb950]/30",
   },
   running: {
     dot: "bg-[#d29922]",
-    text: "text-[#f2cc60]",
-    pill: "bg-[#9e6a03]/15 text-[#f2cc60] ring-[#d29922]/35",
-    ring: "ring-[#d29922]/35",
+    text: "text-[#9a6700]",
+    pill: "bg-[#9e6a03]/14 text-[color-mix(in_oklch,#9a6700_62%,var(--text-strong))] ring-[#d29922]/45",
+    ring: "ring-[#d29922]/45",
     glow: "shadow-xs-border-base",
     drop: "bg-[#9e6a03]/10 ring-[#d29922]/30",
   },
   needs_review: {
     dot: "bg-[#58a6ff]",
-    text: "text-[#79c0ff]",
-    pill: "bg-[#58a6ff]/10 text-[#79c0ff] ring-[#58a6ff]/35",
+    text: "text-[#0969da]",
+    pill: "bg-[#58a6ff]/14 text-[color-mix(in_oklch,#0969da_62%,var(--text-strong))] ring-[#58a6ff]/45",
     ring: "ring-[#58a6ff]/35",
     glow: "shadow-xs-border-base",
     drop: "bg-[#58a6ff]/10 ring-[#58a6ff]/30",
   },
   closed: {
     dot: "bg-[#8957e5]",
-    text: "text-[#d2a8ff]",
-    pill: "bg-[#8957e5]/15 text-[#d2a8ff] ring-[#a371f7]/35",
-    ring: "ring-[#a371f7]/35",
+    text: "text-[#8250df]",
+    pill: "bg-[#8957e5]/14 text-[color-mix(in_oklch,#8250df_62%,var(--text-strong))] ring-[#a371f7]/45",
+    ring: "ring-[#a371f7]/45",
     glow: "shadow-xs-border-base",
     drop: "bg-[#8957e5]/10 ring-[#a371f7]/30",
   },
@@ -351,20 +493,20 @@ function statusTone(status?: string) {
   const value = status?.toLowerCase().replaceAll("-", "_").replaceAll(" ", "_")
   if (!value) return "bg-surface-raised-base text-text-weak ring-border-weaker-base"
   if (value === "failed" || value === "cancelled") {
-    return "bg-[#da3633]/10 text-[#ff7b72] ring-[#f85149]/35"
+    return "bg-[#da3633]/14 text-[color-mix(in_oklch,#cf222e_62%,var(--text-strong))] ring-[#f85149]/45"
   }
   if (value === "needs_review" || value === "review") {
-    return "bg-[#58a6ff]/10 text-[#79c0ff] ring-[#58a6ff]/35"
+    return "bg-[#58a6ff]/14 text-[color-mix(in_oklch,#0969da_62%,var(--text-strong))] ring-[#58a6ff]/45"
   }
   if (value === "running" || value === "in_progress") {
-    return "bg-[#9e6a03]/15 text-[#f2cc60] ring-[#d29922]/35"
+    return "bg-[#9e6a03]/14 text-[color-mix(in_oklch,#9a6700_62%,var(--text-strong))] ring-[#d29922]/45"
   }
-  if (value === "queued") return "bg-[#58a6ff]/10 text-[#79c0ff] ring-[#58a6ff]/35"
+  if (value === "queued") return "bg-[#58a6ff]/14 text-[color-mix(in_oklch,#0969da_62%,var(--text-strong))] ring-[#58a6ff]/45"
   if (value === "ready" || value === "open") {
-    return "bg-[#238636]/15 text-[#7ee787] ring-[#3fb950]/35"
+    return "bg-[#238636]/14 text-[color-mix(in_oklch,#1a7f37_62%,var(--text-strong))] ring-[#3fb950]/45"
   }
   if (value === "done" || value === "closed") {
-    return "bg-[#8957e5]/15 text-[#d2a8ff] ring-[#a371f7]/35"
+    return "bg-[#8957e5]/14 text-[color-mix(in_oklch,#8250df_62%,var(--text-strong))] ring-[#a371f7]/45"
   }
   return "bg-surface-raised-base text-text-weak ring-border-weaker-base"
 }
@@ -629,72 +771,72 @@ function Timeline(props: { events: AgentBoardRunEvent[] }) {
     <Show
       when={props.events.length > 0}
       fallback={
-        <div class="rounded-md bg-surface-raised-base p-4 text-center">
-          <div class="mx-auto flex size-9 items-center justify-center rounded-md bg-background-base text-text-weak shadow-xs-border-base">
+        <div class="flex flex-col items-center px-4 py-16 text-center">
+          <div class="flex size-10 items-center justify-center rounded-full bg-surface-raised-base text-text-weak">
             <Icon name="status" class="size-4" />
           </div>
-          <p class="mt-3 text-13-regular text-text-weak">No run events yet.</p>
+          <p class="mt-3 text-13-medium text-text-base">No activity yet</p>
+          <p class="mt-1 text-11-regular text-text-muted">
+            Events will appear here once an agent picks this up.
+          </p>
         </div>
       }
     >
-      <ol class="relative rounded-lg bg-surface-raised-base p-2">
+      <ol>
         <For each={props.events}>
           {(event, index) => {
             const tone = () => eventTone(event.type)
-            const last = () => index() === props.events.length - 1
-            const message = () => event.message?.trim()
+            const isLast = () => index() === props.events.length - 1
+            const messageText = () => event.message?.trim()
+            const showMessage = () => {
+              const value = messageText()
+              return !!value && value !== eventLabel(event.type)
+            }
+            const wallClock = () => new Date(event.time.created).toLocaleString()
+            const isoTime = () => new Date(event.time.created).toISOString()
+            const relative = () => formatRelative(event.time.created) || formatTime(event.time.created)
             return (
-              <li class="relative grid grid-cols-[14px_minmax(0,1fr)] gap-3 pb-1.5 last:pb-0">
-                <div class="relative flex justify-center">
-                  <Show when={!last()}>
-                    <span class="absolute top-4 bottom-[-0.5rem] w-px bg-border-weaker-base" />
-                  </Show>
+              <li class="group/event relative flex gap-3 pb-4 last:pb-0">
+                <Show when={!isLast()}>
                   <span
-                    class={`relative z-10 mt-3 size-2.5 rounded-full ${tone().dot} ring-4 ring-surface-raised-base`}
+                    aria-hidden
+                    class="absolute left-[11px] top-0 bottom-0 w-0.5 bg-border-strong-base"
                   />
-                </div>
-                <div
-                  class="rounded-md px-2.5 py-2 transition-[background,box-shadow] duration-150"
-                  classList={{
-                    "bg-background-base shadow-xs-border-base": last(),
-                    "hover:bg-background-base/60": !last(),
-                  }}
+                </Show>
+                <span
+                  class={`relative z-10 flex size-6 shrink-0 items-center justify-center rounded-full shadow-xs-border-base transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] [&_[data-component=icon]]:text-inherit group-hover/event:scale-110 motion-reduce:transition-none ${tone().dot}`}
                 >
-                  <div class="flex min-w-0 items-start justify-between gap-3">
-                    <div class="min-w-0 flex-1">
-                      <div class="flex min-w-0 items-center gap-2">
-                        <span
-                          class={`flex size-5 shrink-0 items-center justify-center rounded ring-1 ring-inset ${tone().badge}`}
-                        >
-                          <Icon name={tone().icon} class="size-3" />
-                        </span>
-                        <div class="truncate text-13-semibold leading-snug text-text-strong">
-                          {eventLabel(event.type)}
-                        </div>
-                      </div>
-                      <Show when={message() && message() !== eventLabel(event.type)}>
-                        {(value) => (
-                          <p class="mt-1.5 line-clamp-2 pl-7 text-12-regular leading-relaxed text-text-weak">
-                            {value()}
-                          </p>
-                        )}
-                      </Show>
-                    </div>
-                    <time class="shrink-0 pt-0.5 font-mono text-10-regular tabular-nums text-text-weak opacity-80">
-                      {formatTime(event.time.created)}
+                  <Icon name={tone().icon} class="size-3" />
+                </span>
+                <div class="min-w-0 flex-1 pt-0.5">
+                  <div class="flex min-w-0 items-baseline justify-between gap-3">
+                    <h4 class="truncate text-13-semibold leading-snug text-text-strong">
+                      {eventLabel(event.type)}
+                    </h4>
+                    <time
+                      class="shrink-0 text-11-regular tabular-nums text-text-strong"
+                      title={wallClock()}
+                      datetime={isoTime()}
+                    >
+                      {relative()}
                     </time>
                   </div>
+                  <Show when={showMessage()}>
+                    <p class="mt-0.5 text-12-regular leading-relaxed text-text-strong [text-wrap:pretty]">
+                      {messageText()}
+                    </p>
+                  </Show>
                   <Show when={event.data}>
                     {(data) => (
-                      <details class="group ml-7 mt-1.5 text-11-regular">
-                        <summary class="inline-flex cursor-pointer list-none items-center gap-1 rounded px-1.5 py-0.5 text-text-weak transition-colors hover:bg-background-base hover:text-text-base">
+                      <details class="group/data mt-1.5">
+                        <summary class="inline-flex cursor-pointer list-none items-center gap-1 rounded-md border border-border-base bg-surface-raised-base px-2 py-0.5 text-10-semibold uppercase tracking-wider text-text-base transition-colors hover:border-border-strong-base hover:bg-surface-raised-base-hover hover:text-text-strong">
                           <Icon
                             name="chevron-down"
-                            class="size-3 transition-transform duration-150 group-open:rotate-180"
+                            class="size-3 transition-transform duration-150 group-open/data:rotate-180"
                           />
                           <span>Data</span>
                         </summary>
-                        <pre class="mt-1.5 max-h-32 overflow-auto rounded bg-background-base p-2 font-mono text-10-regular leading-relaxed text-text-base shadow-xs-border-base">
+                        <pre class="mt-2 max-h-48 overflow-auto rounded-md bg-surface-raised-base p-2.5 font-mono text-10-regular leading-relaxed text-text-base">
                           {JSON.stringify(data(), null, 2)}
                         </pre>
                       </details>
@@ -744,7 +886,7 @@ function BoardCardContent(props: {
             </span>
           }
         >
-          <span class="flex shrink-0 items-center rounded-full bg-[#9e6a03]/15 px-1.5 py-0.5 text-10-semibold text-[#f2cc60] ring-1 ring-inset ring-[#d29922]/35">
+          <span class="flex shrink-0 items-center rounded-full bg-[#9e6a03]/14 px-1.5 py-0.5 text-10-semibold text-text-strong ring-1 ring-inset ring-[#d29922]/45">
             Running
           </span>
         </Show>
@@ -1014,13 +1156,23 @@ function DetailDrawer(props: {
     props.onRequestChanges(message())
     setMessage("")
   }
-  const tabs = () =>
+  const tabs = createMemo(() =>
     [
       { id: "details" as const, label: "Details" },
-      { id: "timeline" as const, label: "Timeline", count: props.card.events.length },
-      { id: "artifacts" as const, label: "Artifacts", count: props.card.artifacts.length },
+      ...(props.card.events.length > 0
+        ? [{ id: "timeline" as const, label: "Timeline", count: props.card.events.length }]
+        : []),
+      ...(props.card.artifacts.length > 0
+        ? [{ id: "artifacts" as const, label: "Artifacts", count: props.card.artifacts.length }]
+        : []),
       { id: "raw" as const, label: "Raw" },
     ] satisfies Array<{ id: DrawerTab; label: string; count?: number }>
+  )
+
+  createEffect(() => {
+    if (tabs().some((tab) => tab.id === props.tab)) return
+    props.onTabChange("details")
+  })
 
   return (
     <aside
@@ -1051,6 +1203,16 @@ function DetailDrawer(props: {
           {props.card.issue.title}
         </h2>
         <div class="mt-3 flex flex-wrap gap-1.5">
+          <Show when={issueTypeMeta(props.card.issue)}>
+            {(meta) => (
+              <span
+                class={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-10-semibold uppercase tracking-wide ring-1 ring-inset ${meta().tone}`}
+              >
+                <Icon name={meta().icon} class={`size-3 ${meta().iconClass}`} />
+                {meta().label}
+              </span>
+            )}
+          </Show>
           <span
             class={`rounded px-1.5 py-0.5 text-10-semibold uppercase tracking-wide ring-1 ring-inset ${statusTone(run()?.status ?? props.card.issue.status)}`}
           >
@@ -1081,13 +1243,13 @@ function DetailDrawer(props: {
               class="inline-flex items-center gap-1.5 rounded px-2.5 py-1.5 text-12-semibold transition-colors"
               classList={{
                 "bg-surface-raised-base text-text-strong": props.tab === value.id,
-                "text-text-weak hover:bg-surface-raised-base-hover hover:text-text-strong": props.tab !== value.id,
+                "text-text-base hover:bg-surface-raised-base-hover hover:text-text-strong": props.tab !== value.id,
               }}
               onClick={() => props.onTabChange(value.id)}
             >
               <span>{value.label}</span>
               <Show when={value.count !== undefined && value.count > 0}>
-                <span class="rounded bg-background-base px-1 py-0.5 text-10-semibold tabular-nums text-text-weak">
+                <span class="rounded bg-surface-raised-strong px-1 py-0.5 text-10-semibold tabular-nums text-text-strong ring-1 ring-inset ring-border-base">
                   {value.count}
                 </span>
               </Show>
@@ -1138,7 +1300,7 @@ function DetailDrawer(props: {
                   </div>
                   <Show when={current().error}>
                     {(err) => (
-                      <div class="mt-3 rounded bg-[#da3633]/10 p-2 text-12-regular text-[#ff7b72] ring-1 ring-[#f85149]/30">
+                      <div class="mt-3 rounded bg-[#da3633]/14 p-2 text-12-regular text-text-strong ring-1 ring-[#f85149]/45">
                         {err()}
                       </div>
                     )}
@@ -1625,17 +1787,19 @@ function IssueComposer(props: {
         }}
       >
         <div class="flex items-start gap-2 px-3 py-2.5">
-          <button
-            type="button"
-            class="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-surface-raised-base text-text-weak transition-colors hover:bg-surface-raised-base-hover hover:text-text-strong"
-            onClick={() => {
-              setExpanded(true)
-              titleRef?.focus()
-            }}
-            aria-label="Add issue"
-          >
-            <Icon name="plus-small" class="size-3.5" />
-          </button>
+          <Show when={!expanded()}>
+            <button
+              type="button"
+              class="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-surface-raised-base text-text-weak transition-colors hover:bg-surface-raised-base-hover hover:text-text-strong"
+              onClick={() => {
+                setExpanded(true)
+                titleRef?.focus()
+              }}
+              aria-label="Add issue"
+            >
+              <Icon name="plus-small" class="size-3.5" />
+            </button>
+          </Show>
           <textarea
             ref={titleRef}
             rows="1"
@@ -1659,15 +1823,6 @@ function IssueComposer(props: {
             >
               {priorityMeta().label}
             </button>
-            <Show when={!filled() && !isHero()}>
-              <span class="hidden items-center gap-1 text-10-regular text-text-weak md:flex">
-                <kbd class="rounded bg-surface-raised-base px-1 py-0.5 font-mono">⏎</kbd>
-                file
-                <span class="opacity-50">·</span>
-                <kbd class="rounded bg-surface-raised-base px-1 py-0.5 font-mono">⌘⏎</kbd>
-                chat
-              </span>
-            </Show>
             <Show when={!filled()}>
               <button
                 type="button"
@@ -1684,31 +1839,22 @@ function IssueComposer(props: {
             <Show when={filled()}>
               <button
                 type="button"
-                class="inline-flex h-6 items-center gap-1 rounded-md bg-surface-raised-base px-2 text-11-semibold text-text-base transition-colors hover:bg-surface-raised-base-hover hover:text-text-strong disabled:opacity-50"
-                disabled={submitting() || props.busy}
-                onClick={() => void submit(false)}
-              >
-                File
-              </button>
-              <button
-                type="button"
-                class="hidden h-6 items-center gap-1 rounded-md bg-surface-raised-base px-2 text-11-semibold text-text-base transition-colors hover:bg-surface-raised-base-hover hover:text-text-strong disabled:opacity-50 md:inline-flex"
-                disabled={submitting() || props.busy}
-                onClick={planInChat}
-                title="Open a chat that can split this into Beads tickets"
-                aria-label="Plan this request in Chat"
-              >
-                <Icon name="models" class="size-3" />
-                Plan
-              </button>
-              <button
-                type="button"
                 class="inline-flex h-6 items-center gap-1 rounded-md bg-primary px-2 text-11-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
                 disabled={submitting() || props.busy}
+                onClick={() => void submit(false)}
+                title="Create one Beads issue"
+              >
+                Create issue
+              </button>
+              <button
+                type="button"
+                class="inline-flex h-6 items-center gap-1 rounded-md bg-surface-raised-base px-2 text-11-semibold text-text-base transition-colors hover:bg-surface-raised-base-hover hover:text-text-strong disabled:opacity-50"
+                disabled={submitting() || props.busy}
                 onClick={() => void submit(true)}
+                title="Create one Beads issue, then open chat with that issue context"
               >
                 <Icon name="bubble-5" class="size-3" />
-                File & Chat
+                Create & chat
               </button>
             </Show>
           </div>
@@ -1785,27 +1931,19 @@ function IssueComposer(props: {
               </div>
               <span class="ml-auto hidden items-center gap-1.5 text-10-regular text-text-weak md:flex">
                 <kbd class="rounded bg-surface-raised-base px-1 py-0.5 font-mono">⏎</kbd>
-                file
+                create
                 <span class="opacity-50">·</span>
                 <kbd class="rounded bg-surface-raised-base px-1 py-0.5 font-mono">⌘⏎</kbd>
-                file &amp; open chat
-                <span class="opacity-50">·</span>
-                <button
-                  type="button"
-                  class="rounded text-text-weak underline-offset-2 hover:text-text-strong hover:underline"
-                  disabled={!filled() || submitting() || props.busy}
-                  onClick={planInChat}
-                >
-                  plan in chat
-                </button>
+                create &amp; chat
                 <Show when={!isHero()}>
                   <span class="opacity-50">·</span>
                   <button
                     type="button"
-                    class="rounded px-1 py-0.5 text-text-weak underline-offset-2 hover:bg-surface-raised-base hover:text-text-strong hover:underline"
+                    class="inline-flex items-center gap-1 rounded px-1 py-0.5 text-text-weak underline-offset-2 hover:bg-surface-raised-base hover:text-text-strong hover:underline"
                     onClick={collapse}
                   >
-                    esc collapse
+                    <kbd class="rounded bg-surface-raised-base px-1 py-0.5 font-mono">esc</kbd>
+                    collapse
                   </button>
                 </Show>
               </span>
@@ -1829,7 +1967,8 @@ function BoardListView(props: {
   onPlan: (input: ComposerDraft) => void
   onSuggest: () => void
 }) {
-  const rows = () => props.columns.flatMap((column) => column.cards.map((card) => ({ card, column })))
+  const groups = createMemo(() => props.columns.filter((column) => column.cards.length > 0))
+  const totalRows = createMemo(() => props.columns.reduce((sum, column) => sum + column.cards.length, 0))
   const blockerCounts = createMemo(() => {
     const counts = new Map<string, number>()
     for (const dependency of props.dependencies) {
@@ -1840,79 +1979,56 @@ function BoardListView(props: {
   })
   return (
     <div class="flex h-full flex-col">
-      <div class="min-h-0 flex-1 overflow-auto p-4">
-        <div class="mx-auto w-full max-w-6xl overflow-hidden rounded-lg border border-border-weaker-base bg-surface-panel shadow-xs-border-base">
-          <div class="grid grid-cols-[minmax(22rem,1fr)_8rem_5rem_8rem_9rem] border-b border-border-weaker-base bg-surface-raised-base/45 px-3 py-2 text-10-semibold uppercase tracking-wider text-text-muted">
-            <span>Issue</span>
-            <span>Status</span>
-            <span>Priority</span>
-            <span>Dependencies</span>
-            <span>Latest</span>
-          </div>
+      <div class="min-h-0 flex-1 overflow-auto">
+        <div class="mx-auto w-full max-w-5xl px-4 py-5">
           <Show
-            when={rows().length > 0}
-            fallback={<div class="px-4 py-10 text-center text-13-regular text-text-weak">No matching issues.</div>}
+            when={totalRows() > 0}
+            fallback={
+              <div class="rounded-lg border border-dashed border-border-weaker-base bg-surface-panel px-6 py-16 text-center text-13-regular text-text-weak">
+                No matching issues.
+              </div>
+            }
           >
-            <For each={rows()}>
-              {({ card }) => {
-                const accent = () => COLUMN_ACCENT[card.column]
-                const last = () => latestEvent(card)
-                const blockerCount = () => blockerCounts().get(card.issue.id) ?? 0
-                const latest = () =>
-                  last()?.message ?? formatRelative(card.latestRun?.time.updated ?? card.latestRun?.time.ended)
-                return (
-                  <button
-                    type="button"
-                    class="group grid w-full grid-cols-[minmax(22rem,1fr)_8rem_5rem_8rem_9rem] items-center border-b border-border-weaker-base px-3 py-3 text-left transition-colors last:border-b-0 hover:bg-surface-raised-base/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-border-strong-base"
-                    classList={{
-                      "bg-surface-raised-base/80": props.selectedID === card.issue.id,
-                    }}
-                    onClick={() => props.onSelect(card.issue.id)}
-                    onDblClick={() => props.onChat(card.issue.id)}
-                  >
-                    <div class="min-w-0 pr-4">
-                      <div class="flex min-w-0 items-center gap-2">
-                        <span class={issueIDTone()}>{card.issue.id}</span>
-                        <span class="truncate text-13-semibold text-text-strong">{card.issue.title}</span>
-                      </div>
-                      <Show when={cardSummary(card)}>
-                        {(summary) => (
-                          <p class="mt-1 line-clamp-1 text-12-regular text-text-weak">{summary()}</p>
-                        )}
-                      </Show>
-                    </div>
-                    <div class="min-w-0 pr-3">
-                      <span
-                        class={`inline-flex max-w-full items-center rounded-full px-1.5 py-0.5 text-10-semibold ring-1 ring-inset ${statusTone(visibleStatus(card))}`}
-                      >
-                        <span class="truncate">{statusLabel(visibleStatus(card))}</span>
-                      </span>
-                    </div>
-                    <div>
-                      <Show when={card.issue.priority !== undefined} fallback={<span class="text-text-muted">-</span>}>
-                        <span
-                          class={`inline-flex rounded px-1.5 py-0.5 font-mono text-10-semibold ring-1 ring-inset ${priorityTone(card.issue.priority)}`}
-                        >
-                          P{card.issue.priority}
+            <div class="space-y-5">
+              <For each={groups()}>
+                {(column) => {
+                  const accent = COLUMN_ACCENT[column.id]
+                  return (
+                    <section>
+                      <header class="sticky top-0 z-10 -mx-1 flex items-center gap-2 bg-background-base/85 px-1 pb-2 pt-1 backdrop-blur">
+                        <span class="inline-flex size-5 items-center justify-center rounded-md bg-surface-raised-base shadow-xs-border-base">
+                          <Icon name={COLUMN_ICON[column.id]} class={`size-3 ${accent.text}`} />
                         </span>
-                      </Show>
-                    </div>
-                    <div class="flex min-w-0 items-center gap-1.5 pr-3 text-12-regular text-text-weak">
-                      <Icon name={COLUMN_ICON[card.column]} class={`size-3 shrink-0 ${accent().text}`} />
-                      <span class="truncate">
-                        {blockerCount()
-                          ? `${blockerCount()} blocker${blockerCount() === 1 ? "" : "s"}`
-                          : COLUMN_HINT[card.column]}
-                      </span>
-                    </div>
-                    <div class="flex min-w-0 items-center justify-between gap-2 text-12-regular text-text-weak">
-                      <span class="truncate">{latest() || "-"}</span>
-                      <Icon name="bubble-5" class="size-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-70" />
-                    </div>
-                  </button>
-                )
-              }}
-            </For>
+                        <h2 class="text-12-semibold uppercase tracking-wider text-text-strong">{column.title}</h2>
+                        <span
+                          class={`rounded-full px-1.5 py-0.5 text-10-semibold tabular-nums ring-1 ring-inset ${accent.pill}`}
+                        >
+                          {column.cards.length}
+                        </span>
+                        <span class="ml-1 hidden truncate text-11-regular text-text-weak sm:inline">
+                          {COLUMN_HINT[column.id]}
+                        </span>
+                      </header>
+                      <ul class="overflow-hidden rounded-lg border border-border-weaker-base bg-surface-panel shadow-xs-border-base">
+                        <For each={column.cards}>
+                          {(card) => (
+                            <BoardListRow
+                              card={card}
+                              accent={accent}
+                              selected={props.selectedID === card.issue.id}
+                              busy={props.busy === card.issue.id}
+                              blockerCount={blockerCounts().get(card.issue.id) ?? 0}
+                              onSelect={() => props.onSelect(card.issue.id)}
+                              onChat={() => props.onChat(card.issue.id)}
+                            />
+                          )}
+                        </For>
+                      </ul>
+                    </section>
+                  )
+                }}
+              </For>
+            </div>
           </Show>
         </div>
       </div>
@@ -1927,6 +2043,127 @@ function BoardListView(props: {
         />
       </div>
     </div>
+  )
+}
+
+function BoardListRow(props: {
+  card: AgentBoardCard
+  accent: ColumnAccent
+  selected: boolean
+  busy: boolean
+  blockerCount: number
+  onSelect: () => void
+  onChat: () => void
+}) {
+  const run = () => props.card.latestRun
+  const isLive = () => {
+    const value = run()
+    return !!value && RUNNING.has(value.status)
+  }
+  const last = () => latestEvent(props.card)
+  const summary = () => cardSummary(props.card)
+  const labels = () => extractLabels(props.card)
+  const latestText = () => {
+    const event = last()
+    if (event) return eventLabel(event.type)
+    return formatRelative(props.card.latestRun?.time.updated ?? props.card.latestRun?.time.ended)
+  }
+  return (
+    <li class="border-b border-border-weaker-base last:border-b-0">
+      <article
+        role="button"
+        tabindex="0"
+        aria-label={`${props.card.issue.id} — ${props.card.issue.title}`}
+        class="group relative flex w-full cursor-pointer items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-surface-raised-base/55 focus-visible:bg-surface-raised-base/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-border-strong-base"
+        classList={{
+          "bg-surface-raised-base/70": props.selected,
+        }}
+        onClick={props.onSelect}
+        onDblClick={(event) => {
+          event.preventDefault()
+          props.onChat()
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" && event.key !== " ") return
+          event.preventDefault()
+          props.onSelect()
+        }}
+      >
+        <span
+          aria-hidden
+          class={`absolute inset-y-0 left-0 w-1 origin-left rounded-r-full ${props.accent.dot} scale-x-0 transition-transform duration-200 ease-out motion-reduce:transition-none`}
+          classList={{
+            "scale-x-100": props.selected,
+            "group-hover:scale-x-100 group-focus-visible:scale-x-100": !props.selected,
+          }}
+        />
+
+        <span class="flex size-5 shrink-0 items-center justify-center" aria-hidden>
+          <Show
+            when={isLive()}
+            fallback={<span class={`size-2 rounded-full ${props.accent.dot}`} />}
+          >
+            <span class="relative flex size-2">
+              <span
+                class={`absolute inline-flex h-full w-full animate-ping rounded-full ${props.accent.dot} opacity-60`}
+              />
+              <span class={`relative inline-flex size-2 rounded-full ${props.accent.dot}`} />
+            </span>
+          </Show>
+        </span>
+
+        <span class={`shrink-0 ${issueIDTone()}`}>{props.card.issue.id}</span>
+
+        <div class="min-w-0 flex-1">
+          <div class="flex min-w-0 items-center gap-2">
+            <span class="truncate text-13-semibold text-text-strong">{props.card.issue.title}</span>
+            <Show when={labels().length > 0}>
+              <span class="hidden shrink min-w-0 items-center gap-1 md:inline-flex">
+                <For each={labels().slice(0, 2)}>
+                  {(label) => (
+                    <span class="shrink-0 truncate rounded bg-surface-raised-base px-1.5 py-0.5 text-10-regular text-text-weak ring-1 ring-inset ring-border-weaker-base">
+                      {label}
+                    </span>
+                  )}
+                </For>
+                <Show when={labels().length > 2}>
+                  <span class="shrink-0 text-10-regular text-text-muted">+{labels().length - 2}</span>
+                </Show>
+              </span>
+            </Show>
+          </div>
+          <Show when={summary()}>
+            {(text) => <p class="mt-0.5 truncate text-12-regular text-text-weak">{text()}</p>}
+          </Show>
+        </div>
+
+        <div class="ml-auto flex shrink-0 items-center gap-2">
+          <Show when={props.blockerCount > 0}>
+            <span
+              class="inline-flex items-center gap-1 rounded bg-[#da3633]/12 px-1.5 py-0.5 text-10-semibold text-[#cf222e] ring-1 ring-inset ring-[#f85149]/40 [&_[data-component=icon]]:text-inherit"
+              title={`${props.blockerCount} blocking dependenc${props.blockerCount === 1 ? "y" : "ies"}`}
+            >
+              <Icon name="circle-ban-sign" class="size-3" />
+              {props.blockerCount}
+            </span>
+          </Show>
+          <Show when={props.card.issue.priority !== undefined}>
+            <span
+              class={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 font-mono text-10-semibold ring-1 ring-inset ${priorityTone(props.card.issue.priority)}`}
+            >
+              P{props.card.issue.priority}
+            </span>
+          </Show>
+          <Show when={latestText()}>
+            {(text) => (
+              <span class="hidden min-w-[5rem] truncate text-right text-11-regular tabular-nums text-text-weak lg:inline">
+                {text()}
+              </span>
+            )}
+          </Show>
+        </div>
+      </article>
+    </li>
   )
 }
 
@@ -1978,7 +2215,7 @@ function BoardColumn(props: {
         <BlockedStripeOverlay subtle />
       </Show>
       <header
-        class="sticky top-0 z-10 flex shrink-0 items-center gap-2 rounded-t-lg px-3 py-2.5 transition-colors duration-150"
+        class="sticky top-0 z-10 flex shrink-0 items-center gap-2 px-3 py-2 transition-colors duration-150"
         classList={{
           [accent().drop]: targeted() && (!disabled() || columnDragActive()),
           "cursor-grab active:cursor-grabbing": !props.activeDrag,
@@ -1998,7 +2235,7 @@ function BoardColumn(props: {
           {props.column.cards.length}
         </span>
       </header>
-      <div class="relative z-10 min-h-0 flex-1 space-y-2.5 overflow-auto px-2.5 pb-4" data-scrollable>
+      <div class="relative z-10 min-h-0 flex-1 space-y-2.5 overflow-auto px-2.5 py-2" data-scrollable>
         <Show
           when={props.column.cards.length > 0}
           fallback={
@@ -2088,6 +2325,68 @@ function LoadingState() {
   )
 }
 
+function EpicFilterMenu(props: {
+  epics: EpicSummary[]
+  activeID?: string
+  onSelect: (id: string | undefined) => void
+}) {
+  const epicAccent = ISSUE_TYPE_META.epic
+  const activeEpic = () => props.epics.find((epic) => epic.id === props.activeID)
+  const buttonLabel = () => activeEpic()?.title ?? "Epics"
+  return (
+    <DropdownMenu gutter={6} placement="bottom-end">
+      <DropdownMenu.Trigger
+        class="inline-flex h-6 max-w-36 items-center gap-1.5 rounded-md px-2 text-10-semibold ring-1 ring-inset transition-colors data-[expanded]:bg-surface-raised-base-active data-[expanded]:text-text-strong data-[expanded]:ring-border-base"
+        classList={{
+          "bg-surface-raised-base-active text-text-strong ring-border-base": !!props.activeID,
+          "text-text-weak ring-transparent hover:bg-surface-raised-base hover:text-text-base": !props.activeID,
+        }}
+      >
+        <Icon name={epicAccent.icon} class={`size-3 ${props.activeID ? epicAccent.iconClass : ""}`} />
+        <span class="truncate">{buttonLabel()}</span>
+        <Show when={!props.activeID}>
+          <span class="rounded bg-surface-raised-base px-1 py-0.5 text-10-semibold tabular-nums text-text-base ring-1 ring-inset ring-border-weaker-base">
+            {props.epics.length}
+          </span>
+        </Show>
+        <Icon name="chevron-down" class="size-3 text-text-muted" />
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content class="w-80">
+          <div class="flex items-center justify-between px-2 py-1">
+            <div class="text-11-semibold uppercase tracking-wider text-text-muted">Epics</div>
+            <DropdownMenu.Item disabled={!props.activeID} onSelect={() => props.onSelect(undefined)}>
+              <DropdownMenu.ItemLabel>All work</DropdownMenu.ItemLabel>
+            </DropdownMenu.Item>
+          </div>
+          <DropdownMenu.Separator />
+          <div class="max-h-72 overflow-y-auto">
+            <For each={props.epics}>
+              {(epic) => {
+                const active = () => props.activeID === epic.id
+                const progress = () => `${epic.closedCount}/${epic.childCount}`
+                return (
+                  <DropdownMenu.Item
+                    class="min-w-0"
+                    title={`${epic.id} · ${epic.title}`}
+                    onSelect={() => props.onSelect(active() ? undefined : epic.id)}
+                  >
+                    <Icon name={epicAccent.icon} class={`size-3.5 ${epicAccent.iconClass}`} />
+                    <DropdownMenu.ItemLabel class="min-w-0 truncate">{epic.title}</DropdownMenu.ItemLabel>
+                    <span class="ml-2 shrink-0 rounded bg-surface-raised-base px-1.5 py-0.5 text-10-semibold tabular-nums text-text-weak ring-1 ring-inset ring-border-weaker-base">
+                      {progress()}
+                    </span>
+                  </DropdownMenu.Item>
+                )
+              }}
+            </For>
+          </div>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu>
+  )
+}
+
 function SearchField(props: {
   value: string
   visible: number
@@ -2103,7 +2402,7 @@ function SearchField(props: {
       </span>
       <input
         ref={inputRef}
-        type="search"
+        type="text"
         autocomplete="off"
         spellcheck={false}
         class="h-7 w-72 rounded-md bg-surface-raised-base pl-8 pr-20 text-13-regular text-text-strong outline-none placeholder:text-text-weak focus:ring-1 focus:ring-border-strong-base"
@@ -2144,33 +2443,72 @@ function SetupState(props: {
   onDocs: () => void
 }) {
   const missing = () => isMissingBeads(props.error)
-  const canShowDocs = () => !!props.initError || !missing()
   const message = () => props.initError ?? shortError(props.error)
   return (
-    <div class="flex h-full items-center justify-center px-6 pb-48 text-center">
-      <div class="-mt-4 flex max-w-md flex-col items-center gap-6">
-        <Icon name={missing() ? "checklist" : "warning"} size="large" class="text-icon-base" />
-        <div class="flex flex-col items-center gap-2">
-          <h2 class="text-14-medium text-text-strong">{missing() ? "Initialize AgentBoard" : "Board unavailable"}</h2>
-          <p class="max-w-sm text-14-regular text-text-base" style={{ "line-height": "var(--line-height-normal)" }}>
-            {message()}
-          </p>
-          <Show when={missing()}>
-            <p class="max-w-sm text-12-regular text-text-weak">This project does not have Beads set up yet.</p>
-          </Show>
+    <div class="flex h-full items-center justify-center px-6 pb-32">
+      <div class="-mt-4 w-full max-w-2xl rounded-xl border border-border-weaker-base bg-surface-panel p-6 shadow-xs-border-base">
+        <div class="flex items-start gap-4">
+          <div class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-surface-raised-base text-text-strong shadow-xs-border-base">
+            <Icon name={missing() ? "checklist" : "warning"} class="size-5" />
+          </div>
+          <div class="min-w-0 flex-1">
+            <h2 class="text-18-semibold text-text-strong">
+              {missing() ? "Set up Beads for this project" : "AgentBoard could not load"}
+            </h2>
+            <p class="mt-2 text-13-regular leading-relaxed text-text-base">
+              <Show
+                when={missing()}
+                fallback={message()}
+              >
+                AgentBoard stores its tickets in Beads, a local issue tracker designed for coding agents. This project
+                needs a Beads database before the board can show work.
+              </Show>
+            </p>
+          </div>
         </div>
-        <div data-component="getting-started-actions">
-          <Button size="large" icon="plus-small" disabled={props.initializing} onClick={props.onInit}>
-            {props.initializing ? "Initializing…" : "Initialize Beads"}
-          </Button>
-          <Button variant="ghost" size="large" icon="bubble-5" onClick={props.onChat}>
-            Continue in Chat
-          </Button>
-          <Show when={canShowDocs()}>
-            <Button variant="ghost" size="large" icon="square-arrow-top-right" onClick={props.onDocs}>
-              Beads Docs
+
+        <Show when={missing()}>
+          <div class="mt-5 grid gap-2 text-12-regular text-text-base md:grid-cols-3">
+            <div class="rounded-lg bg-background-base p-3 ring-1 ring-inset ring-border-weaker-base">
+              <div class="text-11-semibold uppercase tracking-wider text-text-weak">1. Install</div>
+              <p class="mt-1 leading-relaxed">Install the Beads CLI, or open the docs if it is not available yet.</p>
+            </div>
+            <div class="rounded-lg bg-background-base p-3 ring-1 ring-inset ring-border-weaker-base">
+              <div class="text-11-semibold uppercase tracking-wider text-text-weak">2. Initialize</div>
+              <p class="mt-1 leading-relaxed">
+                Run <code class="rounded bg-surface-raised-base px-1 font-mono">bd init</code> in this project.
+              </p>
+            </div>
+            <div class="rounded-lg bg-background-base p-3 ring-1 ring-inset ring-border-weaker-base">
+              <div class="text-11-semibold uppercase tracking-wider text-text-weak">3. Use the skill</div>
+              <p class="mt-1 leading-relaxed">
+                In Codex, you can ask Chat to help install or use the Beads skill. Try{" "}
+                <code class="rounded bg-surface-raised-base px-1 font-mono">npx skills beads</code>.
+              </p>
+            </div>
+          </div>
+        </Show>
+
+        <Show when={props.initError}>
+          {(error) => (
+            <div class="mt-4 rounded-lg bg-[#da3633]/14 p-3 text-12-regular leading-relaxed text-text-strong ring-1 ring-inset ring-[#f85149]/45">
+              {error()}
+            </div>
+          )}
+        </Show>
+
+        <div class="mt-5 flex flex-wrap items-center gap-2">
+          <Show when={missing()}>
+            <Button size="large" icon="plus-small" disabled={props.initializing} onClick={props.onInit}>
+              {props.initializing ? "Initializing…" : "Run bd init"}
             </Button>
           </Show>
+          <Button variant={missing() ? "secondary" : "ghost"} size="large" icon="bubble-5" onClick={props.onChat}>
+            Ask Chat to help
+          </Button>
+          <Button variant="ghost" size="large" icon="square-arrow-top-right" onClick={props.onDocs}>
+            Beads on GitHub
+          </Button>
         </div>
       </div>
     </div>
@@ -2312,6 +2650,21 @@ function agentBoardIssueChatPrompt(input: { issue: BeadsIssue; column?: AgentBoa
   return lines.join("\n")
 }
 
+function agentBoardSetupPrompt() {
+  return [
+    "Help me set up Beads for this project so AgentBoard can work.",
+    "",
+    "Please:",
+    "1. Check whether the `bd` CLI is installed and available on PATH.",
+    "2. If it is not installed, explain the safest install option for this machine and ask before making system changes.",
+    "3. If it is installed, initialize Beads in this project with `bd init`.",
+    "4. Run a quick Beads command such as `bd list --json --tree=false` or `bd doctor` to verify it works.",
+    "5. End with what changed and what I should do next in AgentBoard.",
+    "",
+    "If the Codex Beads skill is needed, use or install it. The user mentioned `npx skills beads` as a possible path.",
+  ].join("\n")
+}
+
 export default function AgentBoardPage() {
   const sdk = useSDK()
   const server = useServer()
@@ -2337,7 +2690,9 @@ export default function AgentBoardPage() {
   const [activeColumnDrag, setActiveColumnDrag] = createSignal<AgentBoardColumnID>()
   const [boardOrder, setBoardOrder] = createSignal<BoardLocalOrder>(loadBoardOrder(sdk.directory))
   const [query, setQuery] = createSignal("")
+  const [timelineOnly, setTimelineOnly] = createSignal(false)
   const [viewMode, setViewMode] = createSignal<AgentBoardViewMode>("board")
+  const [activeEpicID, setActiveEpicID] = createSignal<string>()
   const [drawerTab, setDrawerTab] = createSignal<DrawerTab>("details")
   const [drawerID, setDrawerID] = createSignal<string>()
   const [drawerOpen, setDrawerOpen] = createSignal(false)
@@ -2409,14 +2764,53 @@ export default function AgentBoardPage() {
       .sort((a, b) => b[1] - a[1])
       .map(([label]) => label)
   })
+  const epicMeta = createMemo<EpicSummary[]>(() => {
+    const cards = allCards()
+    const deps = board()?.graph.dependencies ?? []
+    const idToCard = new Map(cards.map((card) => [card.issue.id, card] as const))
+    return cards
+      .filter((card) => issueType(card.issue) === "epic")
+      .map((card) => {
+        const childIDs = buildEpicChildren(deps, cards, card.issue.id)
+        let closed = 0
+        for (const id of childIDs) {
+          const child = idToCard.get(id)
+          if (child?.column === "closed") closed++
+        }
+        return {
+          id: card.issue.id,
+          title: card.issue.title,
+          childCount: childIDs.size,
+          closedCount: closed,
+          childIDs,
+        }
+      })
+      .filter((epic) => epic.childCount > 0)
+      .sort((a, b) => a.title.localeCompare(b.title))
+  })
+  const activeEpic = createMemo(() => {
+    const id = activeEpicID()
+    if (!id) return undefined
+    return epicMeta().find((meta) => meta.id === id)
+  })
+  createEffect(() => {
+    const id = activeEpicID()
+    if (!id) return
+    if (epicMeta().some((meta) => meta.id === id)) return
+    setActiveEpicID(undefined)
+  })
   const filteredColumns = createMemo(() => {
     const term = query().trim().toLowerCase()
     const current = board()
+    const childIDs = activeEpic()?.childIDs
     if (!current) return []
-    if (!term) return current.columns
     return current.columns.map((column) => ({
       ...column,
       cards: column.cards.filter((card) => {
+        if (issueType(card.issue) === "epic") return false
+        if (childIDs && !childIDs.has(card.issue.id)) return false
+        if (timelineOnly() && card.events.length === 0) return false
+        if (!term) return true
         const haystack = [
           card.issue.id,
           card.issue.title,
@@ -2626,6 +3020,13 @@ export default function AgentBoardPage() {
   function suggestInChat() {
     const slug = base64Encode(sdk.directory)
     const prompt = agentBoardSuggestionPrompt(board())
+    setSessionHandoff(slug, { prompt })
+    navigate(`/${slug}/session?prompt=${encodeURIComponent(prompt)}`)
+  }
+
+  function setupInChat() {
+    const slug = base64Encode(sdk.directory)
+    const prompt = agentBoardSetupPrompt()
     setSessionHandoff(slug, { prompt })
     navigate(`/${slug}/session?prompt=${encodeURIComponent(prompt)}`)
   }
@@ -3090,7 +3491,7 @@ export default function AgentBoardPage() {
         {(value) => (
           <button
             type="button"
-            class="inline-flex h-full items-center gap-1.5 border-r border-border-weak-base px-2 text-10-semibold transition-colors last:border-r-0"
+            class="inline-flex h-full items-center gap-1.5 border-r border-border-weak-base px-2 text-10-semibold transition-colors last:border-r-0 [&_[data-component=icon]]:text-inherit"
             classList={{
               "bg-surface-raised-base-active text-text-strong": viewMode() === value.id,
               "text-text-weak hover:bg-surface-raised-base hover:text-text-base": viewMode() !== value.id,
@@ -3126,6 +3527,25 @@ export default function AgentBoardPage() {
         {(mount) => (
           <Portal mount={mount()}>
             <div class="flex items-center gap-2">
+              <Show when={epicMeta().length > 0}>
+                <EpicFilterMenu
+                  epics={epicMeta()}
+                  activeID={activeEpicID()}
+                  onSelect={(id) => setActiveEpicID(id)}
+                />
+              </Show>
+              {/* Temporary timeline debug filter; keep the state wired for quick local debugging.
+              <Button
+                variant={timelineOnly() ? "secondary" : "ghost"}
+                size="small"
+                class="h-6 px-2 text-10-semibold"
+                onClick={() => setTimelineOnly(!timelineOnly())}
+                aria-pressed={timelineOnly()}
+                title="Temporary debug filter: show only cards with timeline events"
+              >
+                Timeline
+              </Button>
+              */}
               <Button
                 variant="ghost"
                 icon="reset"
@@ -3168,9 +3588,27 @@ export default function AgentBoardPage() {
                 />
               </Show>
               <Show when={!titlebarRightMount()}>
+                <Show when={epicMeta().length > 0}>
+                  <EpicFilterMenu
+                    epics={epicMeta()}
+                    activeID={activeEpicID()}
+                    onSelect={(id) => setActiveEpicID(id)}
+                  />
+                </Show>
                 <Button variant="secondary" size="small" icon="reset" onClick={() => void load()} disabled={loading()}>
                   Refresh
                 </Button>
+                {/* Temporary timeline debug filter; keep the state wired for quick local debugging.
+                <Button
+                  variant={timelineOnly() ? "secondary" : "ghost"}
+                  size="small"
+                  onClick={() => setTimelineOnly(!timelineOnly())}
+                  aria-pressed={timelineOnly()}
+                  title="Temporary debug filter: show only cards with timeline events"
+                >
+                  Timeline
+                </Button>
+                */}
                 {modeSwitch()}
               </Show>
             </div>
@@ -3190,7 +3628,7 @@ export default function AgentBoardPage() {
                   initError={initError()}
                   initializing={initializing()}
                   onInit={() => void initBeads()}
-                  onChat={() => navigate(`/${base64Encode(sdk.directory)}/session`)}
+                  onChat={setupInChat}
                   onDocs={() => platform.openLink(BEADS_DOCS_URL)}
                 />
               )
@@ -3229,6 +3667,8 @@ export default function AgentBoardPage() {
                   </div>
                 }
               >
+                <div class="flex h-full flex-col">
+                  <div class="min-h-0 flex-1">
                 <Show
                   when={viewMode() === "graph"}
                   fallback={
@@ -3368,6 +3808,8 @@ export default function AgentBoardPage() {
                     }}
                   />
                 </Show>
+                  </div>
+                </div>
               </Show>
             )}
           </Show>

@@ -49,17 +49,17 @@ type GraphEdgeShape = {
 }
 
 const COLUMN_ACCENT: Record<AgentBoardColumnID, { dot: string; tint: string; ring: string }> = {
-  blocked: { dot: "bg-[#f85149]", tint: "bg-[#da3633]/10 text-[#ff7b72]", ring: "ring-[#f85149]/30" },
-  ready: { dot: "bg-[#3fb950]", tint: "bg-[#238636]/12 text-[#7ee787]", ring: "ring-[#3fb950]/30" },
-  running: { dot: "bg-[#d29922]", tint: "bg-[#9e6a03]/14 text-[#f2cc60]", ring: "ring-[#d29922]/30" },
-  needs_review: { dot: "bg-[#58a6ff]", tint: "bg-[#58a6ff]/10 text-[#79c0ff]", ring: "ring-[#58a6ff]/30" },
-  closed: { dot: "bg-[#8957e5]", tint: "bg-[#8957e5]/12 text-[#d2a8ff]", ring: "ring-[#a371f7]/30" },
+  blocked: { dot: "bg-[#f85149]", tint: "bg-[#da3633]/14 text-text-strong", ring: "ring-[#f85149]/45" },
+  ready: { dot: "bg-[#3fb950]", tint: "bg-[#238636]/14 text-text-strong", ring: "ring-[#3fb950]/45" },
+  running: { dot: "bg-[#d29922]", tint: "bg-[#9e6a03]/14 text-text-strong", ring: "ring-[#d29922]/45" },
+  needs_review: { dot: "bg-[#58a6ff]", tint: "bg-[#58a6ff]/14 text-text-strong", ring: "ring-[#58a6ff]/45" },
+  closed: { dot: "bg-[#8957e5]", tint: "bg-[#8957e5]/14 text-text-strong", ring: "ring-[#a371f7]/45" },
 }
 
 function priorityTone(priority?: number | string) {
   const value = typeof priority === "number" ? priority : Number(priority)
-  if (value === 0) return "bg-[#da3633]/10 text-[#ff7b72] ring-[#f85149]/35"
-  if (value === 1) return "bg-[#9e6a03]/15 text-[#f2cc60] ring-[#d29922]/35"
+  if (value === 0) return "bg-[#da3633]/14 text-text-strong ring-[#f85149]/45"
+  if (value === 1) return "bg-[#9e6a03]/14 text-text-strong ring-[#d29922]/45"
   if (value === 2) return "bg-surface-raised-base text-text-base ring-border-strong-base"
   if (value === 3) return "bg-surface-raised-base text-text-weak ring-border-weaker-base"
   if (value === 4) return "bg-surface-raised-base text-text-weak ring-border-weaker-base"
@@ -1216,7 +1216,7 @@ export function GraphMode(props: {
     <div class="relative flex h-full min-h-0 flex-col overflow-hidden bg-background-base">
       <div class="flex h-12 shrink-0 items-center justify-end gap-3 border-b border-border-weaker-base bg-background-base/95 px-4">
         <div class="flex shrink-0 items-center gap-2">
-          <div class="hidden h-7 items-center gap-0.5 rounded-md bg-surface-raised-base p-0.5 shadow-xs-border-base md:flex">
+          <div class="hidden h-[24px] items-center overflow-hidden rounded-md border border-border-weak-base bg-surface-panel md:flex">
             <For
               each={
                 [
@@ -1233,9 +1233,9 @@ export function GraphMode(props: {
                 return (
                   <button
                     type="button"
-                    class="inline-flex h-6 items-center gap-1.5 rounded px-2 text-11-semibold transition-all"
+                    class="inline-flex h-full items-center gap-1.5 border-r border-border-weak-base px-2 text-11-semibold transition-colors last:border-r-0"
                     classList={{
-                      "bg-background-base text-text-strong shadow-xs-border-base": isActive(),
+                      "bg-surface-raised-base-active text-text-strong": isActive(),
                       "text-text-weak hover:bg-surface-raised-base-hover hover:text-text-base": !isActive(),
                     }}
                     onClick={() => selectFilter(value[0])}
@@ -1248,10 +1248,10 @@ export function GraphMode(props: {
                     </Show>
                     <span>{value[1]}</span>
                     <span
-                      class="rounded-sm px-1 font-mono text-10-regular tabular-nums"
+                      class="font-mono text-10-regular tabular-nums"
                       classList={{
-                        "bg-surface-raised-base text-text-strong": isActive(),
-                        "bg-background-base/60 text-text-weak": !isActive(),
+                        "text-text-strong": isActive(),
+                        "text-text-weak": !isActive(),
                       }}
                     >
                       {count()}
