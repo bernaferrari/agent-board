@@ -13,6 +13,19 @@ export type BeadsIssue = {
   raw: Record<string, unknown>
 }
 
+export type AgentBoardDependency = {
+  fromIssueID: string
+  toIssueID: string
+  type: string
+}
+
+export type AgentBoardGraphPosition = {
+  issueID: string
+  x: number
+  y: number
+  pinned: boolean
+}
+
 export type AgentBoardRun = {
   id: string
   projectID: string
@@ -94,6 +107,10 @@ export type AgentBoardBoard = {
     title: string
     cards: AgentBoardCard[]
   }>
+  graph: {
+    dependencies: AgentBoardDependency[]
+    positions: AgentBoardGraphPosition[]
+  }
 }
 
 export type AgentBoardStartReadyResult = {
@@ -158,6 +175,11 @@ export function createAgentBoardClient(input: { server: ServerConnection.HttpBas
       request<boolean>(`/cards/${encodeURIComponent(issueID)}/status`, {
         method: "POST",
         body: JSON.stringify({ column }),
+      }),
+    saveGraphPositions: (positions: AgentBoardGraphPosition[]) =>
+      request<boolean>("/graph/positions", {
+        method: "POST",
+        body: JSON.stringify({ positions }),
       }),
     cancelRun: (runID: string) => request<AgentBoardRun>(`/runs/${encodeURIComponent(runID)}/cancel`, { method: "POST" }),
     requestChanges: (runID: string, message: string) =>

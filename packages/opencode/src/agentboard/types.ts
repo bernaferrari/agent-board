@@ -12,6 +12,19 @@ export type BeadsIssue = {
   raw: Record<string, unknown>
 }
 
+export type AgentBoardDependency = {
+  fromIssueID: string
+  toIssueID: string
+  type: string
+}
+
+export type AgentBoardGraphPosition = {
+  issueID: string
+  x: number
+  y: number
+  pinned: boolean
+}
+
 export type AgentBoardProject = {
   id: string
   worktree: string
@@ -99,4 +112,8 @@ export type AgentBoardBoard = {
   project: AgentBoardProject
   generatedAt: number
   columns: AgentBoardColumn[]
+  graph: {
+    dependencies: AgentBoardDependency[]
+    positions: AgentBoardGraphPosition[]
+  }
 }

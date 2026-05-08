@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { createIssueArgs, normalizeIssue } from "../../src/agentboard/beads"
+import { createIssueArgs, dependenciesFromRawIssues, normalizeDependency, normalizeIssue } from "../../src/agentboard/beads"
 import { columnForIssue } from "../../src/agentboard/board"
 import { beadsStatusForColumn } from "../../src/agentboard/moves"
 import { createAgentBoardPrompt } from "../../src/agentboard/prompt"
@@ -70,6 +70,37 @@ describe("agentboard", () => {
     ])
   })
 
+  test("normalizes Beads dependency records for graph projection", () => {
+    expect(
+      normalizeDependency({
+        from_id: "AB-2",
+        to_id: "AB-1",
+        dependency_type: "blocks",
+      }),
+    ).toEqual({
+      fromIssueID: "AB-2",
+      toIssueID: "AB-1",
+      type: "blocks",
+    })
+    expect(
+      dependenciesFromRawIssues([
+        {
+          id: "AB-2",
+          title: "Dependent",
+          raw: {
+            depends_on: ["AB-1"],
+          },
+        },
+      ]),
+    ).toEqual([
+      {
+        fromIssueID: "AB-2",
+        toIssueID: "AB-1",
+        type: "blocks",
+      },
+    ])
+  })
+
   test("generates a scoped agent prompt from an issue", () => {
     const prompt = createAgentBoardPrompt({
       id: "task-456",
@@ -90,7 +121,7 @@ describe("agentboard", () => {
     expect(beadsStatusForColumn("ready")).toBe("open")
     expect(beadsStatusForColumn("running")).toBe("in_progress")
     expect(beadsStatusForColumn("closed")).toBe("closed")
-    expect(beadsStatusForColumn("needs_review")).toBeUndefined()
+    expect(beadsStatusForColumn("needs_review")).toBe("in_progress")
     expect(() => beadsStatusForColumn("blocked")).toThrow("dependency-derived")
   })
 
@@ -99,7 +130,8 @@ describe("agentboard", () => {
     expect(columnForIssue("ready", run("running"))).toBe("running")
     expect(columnForIssue("running", run("needs_review"))).toBe("needs_review")
     expect(columnForIssue("running", run("failed"))).toBe("needs_review")
-    expect(columnForIssue("ready", run("needs_review"))).toBe("ready")
+    expect(columnForIssue("ready", run("needs_review"))).toBe("needs_review")
+    expect(columnForIssue("ready", run("failed"))).toBe("needs_review")
     expect(columnForIssue("running", run("done"))).toBe("closed")
     expect(columnForIssue("blocked", run("cancelled"))).toBe("blocked")
   })

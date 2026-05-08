@@ -42,6 +42,7 @@ function board(): AgentBoardBoard {
   return {
     project: { id: "project-1", worktree: "/tmp/project", enabled: true, time: { created: 1, updated: 1 } },
     generatedAt: 1,
+    graph: { dependencies: [], positions: [] },
     columns: [
       { id: "blocked", title: "Blocked", cards: [] },
       { id: "ready", title: "Ready", cards: [readyCard, reviewableCard] },

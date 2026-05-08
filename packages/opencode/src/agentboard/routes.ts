@@ -80,6 +80,34 @@ export function AgentBoardRoutes() {
       }),
     )
     .get("/board", async (c) => handle(c, () => getAgentBoard()))
+    .post("/graph/positions", async (c) =>
+      handle(c, async () => {
+        const body = z
+          .object({
+            positions: z.array(
+              z.object({
+                issueID: z.string().min(1),
+                x: z.number(),
+                y: z.number(),
+                pinned: z.boolean().optional(),
+              }),
+            ),
+          })
+          .parse(await c.req.json())
+        const project = AgentBoardStore.upsertProject({ worktree: Instance.worktree })
+        AgentBoardStore.setGraphPositions(
+          project.id,
+          body.positions.map((position) => ({
+            issueID: position.issueID,
+            x: position.x,
+            y: position.y,
+            pinned: position.pinned ?? true,
+          })),
+        )
+        AgentBoardEvents.emit({ type: "board.updated", projectID: project.id })
+        return true
+      }),
+    )
     .post("/issues", async (c) =>
       handle(c, async () => {
         const body = z

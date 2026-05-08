@@ -1,6 +1,6 @@
 import { AppRuntime } from "@/effect/app-runtime"
-import { InstanceBootstrap } from "@/project/bootstrap"
 import { Instance } from "@/project/instance"
+import { WithInstance } from "@/project/with-instance"
 import { SessionID } from "@/session/schema"
 import { SessionPrompt } from "@/session/prompt"
 import { SessionShare } from "@/share/session"
@@ -29,9 +29,8 @@ function log(
 async function finishRun(runID: string, worktree: string, lease: string, promise: Promise<unknown>) {
   try {
     await promise
-    await Instance.provide({
+    await WithInstance.provide({
       directory: worktree,
-      init: () => AppRuntime.runPromise(InstanceBootstrap),
       async fn() {
         const current = AgentBoardStore.getRun(runID)
         if (!current || current.status === "cancelled") return

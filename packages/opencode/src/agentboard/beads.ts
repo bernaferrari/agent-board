@@ -68,6 +68,7 @@ export async function runBdJson<T>(args: string[], options: RunOptions): Promise
 }
 
 export type BeadsRawIssue = Record<string, unknown>
+export type BeadsRawDependency = Record<string, unknown>
 export type BeadsCreateInput = {
   title: string
   description?: string
@@ -98,6 +99,110 @@ function numberValue(input: unknown) {
   if (typeof input !== "string") return
   const parsed = Number(input)
   return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function stringArrayValue(input: unknown) {
+  if (!Array.isArray(input)) return []
+  return input.filter((value): value is string => typeof value === "string" && value.length > 0)
+}
+
+function objectArrayValue(input: unknown) {
+  if (!Array.isArray(input)) return []
+  return input.filter((value): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value))
+}
+
+function dependencyID(input: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = stringValue(input[key])
+    if (value) return value
+  }
+}
+
+export function normalizeDependency(input: BeadsRawDependency): import("./types").AgentBoardDependency | undefined {
+  const fromIssueID = dependencyID(input, [
+    "from_id",
+    "from",
+    "issue_id",
+    "issue",
+    "dependent_id",
+    "dependent",
+    "blocked_id",
+    "child_id",
+  ])
+  const toIssueID = dependencyID(input, [
+    "to_id",
+    "to",
+    "depends_on_id",
+    "dependency_id",
+    "dependency",
+    "blocker_id",
+    "parent_id",
+  ])
+  if (!fromIssueID || !toIssueID || fromIssueID === toIssueID) return
+  return {
+    fromIssueID,
+    toIssueID,
+    type:
+      stringValue(input.type) ??
+      stringValue(input.dependency_type) ??
+      stringValue(input.kind) ??
+      stringValue(input.relation) ??
+      "blocks",
+  }
+}
+
+function relationFromIssue(issue: import("./types").BeadsIssue, toIssueID: string, type: string) {
+  if (!toIssueID || toIssueID === issue.id) return
+  return {
+    fromIssueID: issue.id,
+    toIssueID,
+    type,
+  }
+}
+
+function relationToIssue(issue: import("./types").BeadsIssue, fromIssueID: string, type: string) {
+  if (!fromIssueID || fromIssueID === issue.id) return
+  return {
+    fromIssueID,
+    toIssueID: issue.id,
+    type,
+  }
+}
+
+export function dependenciesFromRawIssues(issues: import("./types").BeadsIssue[]) {
+  const output: import("./types").AgentBoardDependency[] = []
+  const add = (dependency: import("./types").AgentBoardDependency | undefined) => {
+    if (dependency) output.push(dependency)
+  }
+  for (const issue of issues) {
+    const raw = issue.raw
+    for (const id of stringArrayValue(raw.depends_on)) add(relationFromIssue(issue, id, "blocks"))
+    for (const id of stringArrayValue(raw.dependencies)) add(relationFromIssue(issue, id, "blocks"))
+    for (const id of stringArrayValue(raw.blocked_by)) add(relationFromIssue(issue, id, "blocks"))
+    for (const id of stringArrayValue(raw.blocks)) add(relationToIssue(issue, id, "blocks"))
+    for (const id of stringArrayValue(raw.children)) add(relationToIssue(issue, id, "parent-child"))
+    const parent = stringValue(raw.parent) ?? stringValue(raw.parent_id)
+    if (parent) add(relationFromIssue(issue, parent, "parent-child"))
+    const discoveredFrom = stringValue(raw.discovered_from) ?? stringValue(raw.discovered_from_id)
+    if (discoveredFrom) add(relationFromIssue(issue, discoveredFrom, "discovered-from"))
+    for (const value of objectArrayValue(raw.dependencies)) {
+      const toIssueID = dependencyID(value, ["to_id", "to", "depends_on_id", "dependency_id", "dependency", "blocker_id", "parent_id", "id"])
+      const normalized = normalizeDependency({
+        issue_id: issue.id,
+        ...value,
+        to_id: stringValue(value.to_id) ?? toIssueID,
+      } as BeadsRawDependency)
+      if (normalized) output.push(normalized)
+    }
+  }
+  const seen = new Set<string>()
+  return output.filter((dependency) => {
+    if (!dependency) return false
+    const key = `${dependency.fromIssueID}:${dependency.toIssueID}:${dependency.type}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 export function createIssueArgs(input: BeadsCreateInput) {
@@ -137,6 +242,20 @@ export const Beads = {
   async show(cwd: string, issueID: string) {
     const issue = await runBdJson<BeadsRawIssue>(["show", issueID, "--json"], { cwd })
     return normalizeIssue(issue)
+  },
+  async listDependencies(cwd: string, issueIDs: string[]) {
+    if (issueIDs.length === 0) return []
+    const output: import("./types").AgentBoardDependency[] = []
+    for (let index = 0; index < issueIDs.length; index += 200) {
+      const chunk = issueIDs.slice(index, index + 200)
+      const dependencies = await runBdJson<BeadsRawDependency[] | { dependencies?: BeadsRawDependency[] }>(
+        ["dep", "list", ...chunk, "--json"],
+        { cwd },
+      )
+      const records = Array.isArray(dependencies) ? dependencies : Array.isArray(dependencies.dependencies) ? dependencies.dependencies : []
+      output.push(...records.map(normalizeDependency).filter((dependency): dependency is import("./types").AgentBoardDependency => !!dependency))
+    }
+    return output
   },
   async create(cwd: string, input: BeadsCreateInput) {
     const result = await runBd(createIssueArgs(input), { cwd })

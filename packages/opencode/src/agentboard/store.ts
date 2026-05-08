@@ -3,6 +3,7 @@ import { Database, sql } from "@/storage/db"
 import type {
   AgentBoardArtifact,
   AgentBoardArtifactKind,
+  AgentBoardGraphPosition,
   AgentBoardProject,
   AgentBoardRun,
   AgentBoardRunEvent,
@@ -59,6 +60,15 @@ type LeaseRow = {
   owner: string
   expires_at: number
   time_created: number
+  time_updated: number
+}
+
+type GraphPositionRow = {
+  project_id: string
+  issue_id: string
+  x: number
+  y: number
+  pinned: number
   time_updated: number
 }
 
@@ -138,6 +148,17 @@ function ensure() {
         PRIMARY KEY(project_id, issue_id)
       )
     `)
+    db.run(sql`
+      CREATE TABLE IF NOT EXISTS agentboard_graph_position (
+        project_id TEXT NOT NULL,
+        issue_id TEXT NOT NULL,
+        x REAL NOT NULL,
+        y REAL NOT NULL,
+        pinned INTEGER NOT NULL DEFAULT 1,
+        time_updated INTEGER NOT NULL,
+        PRIMARY KEY(project_id, issue_id)
+      )
+    `)
   })
   ready = true
 }
@@ -200,6 +221,15 @@ function eventFromRow(row: EventRow): AgentBoardRunEvent {
     time: {
       created: row.time_created,
     },
+  }
+}
+
+function graphPositionFromRow(row: GraphPositionRow): AgentBoardGraphPosition {
+  return {
+    issueID: row.issue_id,
+    x: row.x,
+    y: row.y,
+    pinned: row.pinned === 1,
   }
 }
 
@@ -431,5 +461,31 @@ export const AgentBoardStore = {
     Database.use((db: any) =>
       db.run(sql`DELETE FROM agentboard_lease WHERE resource = ${input.resource} AND owner = ${input.owner}`),
     )
+  },
+  listGraphPositions(projectID: string) {
+    ensure()
+    return Database.use((db: any) =>
+      db
+        .all(sql<GraphPositionRow>`SELECT * FROM agentboard_graph_position WHERE project_id = ${projectID}`)
+        .map(graphPositionFromRow),
+    )
+  },
+  setGraphPositions(projectID: string, positions: AgentBoardGraphPosition[]) {
+    ensure()
+    const now = Date.now()
+    Database.use((db: any) => {
+      for (const position of positions) {
+        if (!position.issueID || !Number.isFinite(position.x) || !Number.isFinite(position.y)) continue
+        db.run(sql`
+          INSERT INTO agentboard_graph_position (project_id, issue_id, x, y, pinned, time_updated)
+          VALUES (${projectID}, ${position.issueID}, ${position.x}, ${position.y}, ${position.pinned ? 1 : 0}, ${now})
+          ON CONFLICT(project_id, issue_id) DO UPDATE SET
+            x = ${position.x},
+            y = ${position.y},
+            pinned = ${position.pinned ? 1 : 0},
+            time_updated = ${now}
+        `)
+      }
+    })
   },
 }

@@ -4,6 +4,7 @@ import { showToast } from "@opencode-ai/ui/toast"
 import { base64Encode } from "@opencode-ai/core/util/encode"
 import { useNavigate } from "@solidjs/router"
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js"
+import { Portal } from "solid-js/web"
 import {
   createDroppable,
   createDraggable,
@@ -27,6 +28,7 @@ import {
   createAgentBoardClient,
 } from "./api"
 import { BOARD_COLUMN_IDS, canMoveCardTo, findCard, isBoardColumnID, moveCardOnBoard } from "./board-state"
+import { GraphMode, type AgentBoardViewMode } from "./graph-view"
 
 const RUNNING = new Set(["queued", "running"])
 const BEADS_DOCS_URL = "https://github.com/steveyegge/beads"
@@ -35,6 +37,7 @@ const BOARD_ORDER_STORAGE_PREFIX = "agentboard.order"
 const COLUMN_DRAG_PREFIX = "agentboard-column:"
 const NOTIFY_STATUSES = new Set(["needs_review", "failed", "done"])
 const CARD_INSERT_RATIO = 0.5
+const CARD_DRAG_THRESHOLD = 5
 const NOTIFY_TITLES: Record<string, string> = {
   needs_review: "Ready for review",
   failed: "Run failed",
@@ -59,9 +62,7 @@ function stopBoardPointerTracking() {
 function startBoardPointerTracking(event: PointerEvent) {
   trackBoardDragPointer(event)
   const current = event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined
-  const target =
-    current?.closest<HTMLElement>("[data-agentboard-card],[data-agentboard-column]") ??
-    current
+  const target = current?.closest<HTMLElement>("[data-agentboard-card],[data-agentboard-column]") ?? current
   const rect = target?.getBoundingClientRect()
   boardDragGrabOffset = rect ? { x: event.clientX - rect.left, y: event.clientY - rect.top } : undefined
   boardDragSourceSize = rect ? { width: rect.width, height: rect.height } : undefined
@@ -253,6 +254,14 @@ type ColumnAccent = {
   drop: string
 }
 
+type PendingCardDrag = {
+  card: AgentBoardCard
+  current: AgentBoardBoard
+  rect: DOMRect
+  startX: number
+  startY: number
+}
+
 const COLUMN_ACCENT: Record<AgentBoardColumnID, ColumnAccent> = {
   blocked: {
     dot: "bg-[#f85149]",
@@ -363,7 +372,10 @@ function statusTone(status?: string) {
 function priorityTone(priority?: number | string) {
   const value = typeof priority === "number" ? priority : Number(priority)
   if (!Number.isFinite(value)) return "bg-surface-raised-base text-text-weak ring-border-weaker-base"
-  return PRIORITY_OPTIONS.find((option) => option.value === value)?.tone ?? "bg-surface-raised-base text-text-weak ring-border-weaker-base"
+  return (
+    PRIORITY_OPTIONS.find((option) => option.value === value)?.tone ??
+    "bg-surface-raised-base text-text-weak ring-border-weaker-base"
+  )
 }
 
 function issueIDTone() {
@@ -637,7 +649,9 @@ function Timeline(props: { events: AgentBoardRunEvent[] }) {
                   <Show when={!last()}>
                     <span class="absolute top-4 bottom-[-0.5rem] w-px bg-border-weaker-base" />
                   </Show>
-                  <span class={`relative z-10 mt-3 size-2.5 rounded-full ${tone().dot} ring-4 ring-surface-raised-base`} />
+                  <span
+                    class={`relative z-10 mt-3 size-2.5 rounded-full ${tone().dot} ring-4 ring-surface-raised-base`}
+                  />
                 </div>
                 <div
                   class="rounded-md px-2.5 py-2 transition-[background,box-shadow] duration-150"
@@ -649,13 +663,21 @@ function Timeline(props: { events: AgentBoardRunEvent[] }) {
                   <div class="flex min-w-0 items-start justify-between gap-3">
                     <div class="min-w-0 flex-1">
                       <div class="flex min-w-0 items-center gap-2">
-                        <span class={`flex size-5 shrink-0 items-center justify-center rounded ring-1 ring-inset ${tone().badge}`}>
+                        <span
+                          class={`flex size-5 shrink-0 items-center justify-center rounded ring-1 ring-inset ${tone().badge}`}
+                        >
                           <Icon name={tone().icon} class="size-3" />
                         </span>
-                        <div class="truncate text-13-semibold leading-snug text-text-strong">{eventLabel(event.type)}</div>
+                        <div class="truncate text-13-semibold leading-snug text-text-strong">
+                          {eventLabel(event.type)}
+                        </div>
                       </div>
                       <Show when={message() && message() !== eventLabel(event.type)}>
-                        {(value) => <p class="mt-1.5 line-clamp-2 pl-7 text-12-regular leading-relaxed text-text-weak">{value()}</p>}
+                        {(value) => (
+                          <p class="mt-1.5 line-clamp-2 pl-7 text-12-regular leading-relaxed text-text-weak">
+                            {value()}
+                          </p>
+                        )}
                       </Show>
                     </div>
                     <time class="shrink-0 pt-0.5 font-mono text-10-regular tabular-nums text-text-weak opacity-80">
@@ -666,7 +688,10 @@ function Timeline(props: { events: AgentBoardRunEvent[] }) {
                     {(data) => (
                       <details class="group ml-7 mt-1.5 text-11-regular">
                         <summary class="inline-flex cursor-pointer list-none items-center gap-1 rounded px-1.5 py-0.5 text-text-weak transition-colors hover:bg-background-base hover:text-text-base">
-                          <Icon name="chevron-down" class="size-3 transition-transform duration-150 group-open:rotate-180" />
+                          <Icon
+                            name="chevron-down"
+                            class="size-3 transition-transform duration-150 group-open:rotate-180"
+                          />
                           <span>Data</span>
                         </summary>
                         <pre class="mt-1.5 max-h-32 overflow-auto rounded bg-background-base p-2 font-mono text-10-regular leading-relaxed text-text-base shadow-xs-border-base">
@@ -715,16 +740,13 @@ function BoardCardContent(props: {
       </Show>
 
       <div class="flex items-center gap-1.5">
-        <Show when={props.card.issue.priority !== undefined}>
-          <span class={`shrink-0 rounded px-1.5 py-0.5 font-mono text-10-semibold ring-1 ring-inset ${priorityTone(props.card.issue.priority)}`}>
-            P{props.card.issue.priority}
-          </span>
-        </Show>
-        <span class="ml-auto" />
         <Show
           when={isLive()}
           fallback={
-            <span class={`shrink-0 rounded px-1.5 py-0.5 text-10-semibold uppercase tracking-wide ring-1 ring-inset ${statusTone(status())}`}>
+            <span
+              class={`shrink-0 rounded-full px-1.5 py-0.5 text-10-semibold ring-1 ring-inset ${statusTone(status())}`}
+            >
+              <span class={`mr-1 inline-block size-1.5 rounded-full ${accent().dot}`} />
               {statusLabel(status())}
             </span>
           }
@@ -734,6 +756,13 @@ function BoardCardContent(props: {
             Running
           </span>
         </Show>
+        <Show when={props.card.issue.priority !== undefined}>
+          <span
+            class={`shrink-0 rounded px-1.5 py-0.5 font-mono text-10-semibold ring-1 ring-inset ${priorityTone(props.card.issue.priority)}`}
+          >
+            P{props.card.issue.priority}
+          </span>
+        </Show>
       </div>
 
       <h3 class="mt-2.5 text-13-semibold leading-snug text-text-strong [text-wrap:balance]">
@@ -741,9 +770,7 @@ function BoardCardContent(props: {
       </h3>
 
       <Show when={cardSummary(props.card)}>
-        {(summary) => (
-          <p class="mt-1.5 line-clamp-2 text-12-regular leading-relaxed text-text-weak">{summary()}</p>
-        )}
+        {(summary) => <p class="mt-1.5 line-clamp-2 text-12-regular leading-relaxed text-text-weak">{summary()}</p>}
       </Show>
 
       <Show when={run()?.agent || run()?.model || last()}>
@@ -931,7 +958,13 @@ function ColumnPreview(props: { column: AgentBoardBoard["columns"][number]; widt
   )
 }
 
-function CardDragLayer(props: { card: AgentBoardCard; point: { x: number; y: number }; offset: { x: number; y: number }; width: number; height?: number }) {
+function CardDragLayer(props: {
+  card: AgentBoardCard
+  point: { x: number; y: number }
+  offset: { x: number; y: number }
+  width: number
+  height?: number
+}) {
   return (
     <div
       class="pointer-events-none fixed z-[10000]"
@@ -1002,9 +1035,7 @@ function DetailDrawer(props: {
         <div class="flex items-center justify-between gap-3">
           <div class="flex min-w-0 items-center gap-2">
             <span class={`size-2 rounded-full ${accent().dot}`} />
-            <span class={`max-w-[11rem] truncate ${issueIDTone()}`}>
-              {props.card.issue.id}
-            </span>
+            <span class={`max-w-[11rem] truncate ${issueIDTone()}`}>{props.card.issue.id}</span>
             <span class="text-11-regular text-text-weak">{COLUMN_HINT[props.card.column]}</span>
           </div>
           <button
@@ -1026,7 +1057,9 @@ function DetailDrawer(props: {
             {statusLabel(run()?.status ?? props.card.issue.status ?? props.card.column)}
           </span>
           <Show when={props.card.issue.priority !== undefined}>
-            <span class={`rounded px-1.5 py-0.5 font-mono text-10-semibold ring-1 ring-inset ${priorityTone(props.card.issue.priority)}`}>
+            <span
+              class={`rounded px-1.5 py-0.5 font-mono text-10-semibold ring-1 ring-inset ${priorityTone(props.card.issue.priority)}`}
+            >
               P{props.card.issue.priority}
             </span>
           </Show>
@@ -1233,12 +1266,7 @@ function DetailDrawer(props: {
             </Button>
           </Show>
           <Show when={canReview() && run()?.status !== "failed"}>
-            <Button
-              variant="secondary"
-              size="small"
-              disabled={props.busy}
-              onClick={requestChanges}
-            >
+            <Button variant="secondary" size="small" disabled={props.busy} onClick={requestChanges}>
               Request Changes
             </Button>
           </Show>
@@ -1401,12 +1429,27 @@ function insertArrayItemBefore<T>(items: T[], item: T, before?: T) {
   return next
 }
 
-function DropPlaceholder(props: { height?: number }) {
+function DropPlaceholder(props: { card?: AgentBoardCard; height?: number }) {
   return (
-    <div
-      class="rounded-md bg-background-base opacity-45 shadow-xs-border-base"
-      style={{ height: `${props.height ?? 128}px` }}
-    />
+    <Show
+      when={props.card}
+      fallback={
+        <div
+          class="rounded-md bg-background-base opacity-35 shadow-xs-border-base"
+          style={{ height: `${props.height ?? 128}px` }}
+        />
+      }
+    >
+      {(card) => (
+        <div
+          class="pointer-events-none relative box-border w-full overflow-hidden rounded-md border border-border-weaker-base bg-background-base p-3.5 text-left opacity-35 shadow-xs-border-base"
+          style={{ height: `${props.height ?? 128}px` }}
+          aria-hidden="true"
+        >
+          <BoardCardContent card={card()} busy={false} preview />
+        </div>
+      )}
+    </Show>
   )
 }
 
@@ -1779,6 +1822,7 @@ function BoardColumn(props: {
   selectedID?: string
   busy?: string
   activeDrag?: string
+  activeDragCard?: AgentBoardCard
   activeColumnDrag?: AgentBoardColumnID
   activeTarget?: AgentBoardColumnID
   dropPlacement?: BoardDropPlacement
@@ -1810,7 +1854,8 @@ function BoardColumn(props: {
       class="flex min-h-0 flex-col rounded-lg bg-surface-raised-base transition-[background,box-shadow,opacity] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)]"
       classList={{
         "ring-1 ring-inset ring-border-weaker-base": (dragging() || columnDragActive()) && !targeted(),
-        [`${accent().drop} ring-1 ring-inset shadow-lg ${accent().glow}`]: targeted() && (!disabled() || columnDragActive()),
+        [`${accent().drop} ring-1 ring-inset shadow-lg ${accent().glow}`]:
+          targeted() && (!disabled() || columnDragActive()),
         "opacity-55 ring-1 ring-inset ring-border-critical-base": targeted() && disabled() && !columnDragActive(),
         "!fixed !left-0 !top-0 !h-0 !min-h-0 !w-0 !border-0 opacity-0 pointer-events-none shadow-none overflow-hidden":
           columnDragging(),
@@ -1853,7 +1898,7 @@ function BoardColumn(props: {
                 </div>
               }
             >
-              <DropPlaceholder height={props.placeholderHeight} />
+              <DropPlaceholder card={props.activeDragCard} height={props.placeholderHeight} />
             </Show>
           }
         >
@@ -1861,7 +1906,7 @@ function BoardColumn(props: {
             {(card) => (
               <>
                 <Show when={placeholderBefore(card.issue.id)}>
-                  <DropPlaceholder height={props.placeholderHeight} />
+                  <DropPlaceholder card={props.activeDragCard} height={props.placeholderHeight} />
                 </Show>
                 <BoardCard
                   card={card}
@@ -1882,7 +1927,7 @@ function BoardColumn(props: {
             )}
           </For>
           <Show when={placeholderAtEnd()}>
-            <DropPlaceholder height={props.placeholderHeight} />
+            <DropPlaceholder card={props.activeDragCard} height={props.placeholderHeight} />
           </Show>
         </Show>
       </div>
@@ -1990,25 +2035,16 @@ function SetupState(props: {
       <div class="-mt-4 flex max-w-md flex-col items-center gap-6">
         <Icon name={missing() ? "checklist" : "warning"} size="large" class="text-icon-base" />
         <div class="flex flex-col items-center gap-2">
-          <h2 class="text-14-medium text-text-strong">
-            {missing() ? "Initialize AgentBoard" : "Board unavailable"}
-          </h2>
+          <h2 class="text-14-medium text-text-strong">{missing() ? "Initialize AgentBoard" : "Board unavailable"}</h2>
           <p class="max-w-sm text-14-regular text-text-base" style={{ "line-height": "var(--line-height-normal)" }}>
             {message()}
           </p>
           <Show when={missing()}>
-            <p class="max-w-sm text-12-regular text-text-weak">
-              This project does not have Beads set up yet.
-            </p>
+            <p class="max-w-sm text-12-regular text-text-weak">This project does not have Beads set up yet.</p>
           </Show>
         </div>
         <div data-component="getting-started-actions">
-          <Button
-            size="large"
-            icon="plus-small"
-            disabled={props.initializing}
-            onClick={props.onInit}
-          >
+          <Button size="large" icon="plus-small" disabled={props.initializing} onClick={props.onInit}>
             {props.initializing ? "Initializing…" : "Initialize Beads"}
           </Button>
           <Button variant="ghost" size="large" icon="bubble-5" onClick={props.onChat}>
@@ -2026,12 +2062,7 @@ function SetupState(props: {
 }
 
 function agentBoardPlanningPrompt(input: ComposerDraft) {
-  const lines = [
-    "You are planning work with Beads.",
-    "",
-    "User request:",
-    input.title,
-  ]
+  const lines = ["You are planning work with Beads.", "", "User request:", input.title]
   if (input.description) {
     lines.push("", "Additional detail:", input.description)
   }
@@ -2052,6 +2083,51 @@ function agentBoardPlanningPrompt(input: ComposerDraft) {
     if (input.labels?.length) lines.push(`- labels: ${input.labels.join(", ")}`)
   }
   return lines.join("\n")
+}
+
+function timestampValue(input: unknown): number | undefined {
+  if (typeof input === "number" && Number.isFinite(input)) return input > 10_000_000_000 ? input : input * 1000
+  if (typeof input !== "string" || input.trim().length === 0) return
+  const numeric = Number(input)
+  if (Number.isFinite(numeric)) return numeric > 10_000_000_000 ? numeric : numeric * 1000
+  const parsed = Date.parse(input)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function issueTimestamp(issue: BeadsIssue, keys: string[]) {
+  for (const key of keys) {
+    const value = timestampValue(issue.raw[key])
+    if (value !== undefined) return value
+  }
+}
+
+function closedSortTimestamp(card: AgentBoardCard) {
+  return (
+    card.latestRun?.time.ended ??
+    issueTimestamp(card.issue, [
+      "closed_at",
+      "closedAt",
+      "completed_at",
+      "completedAt",
+      "resolved_at",
+      "resolvedAt",
+      "done_at",
+      "doneAt",
+      "updated_at",
+      "updatedAt",
+      "modified_at",
+      "modifiedAt",
+    ]) ??
+    card.latestRun?.time.updated ??
+    0
+  )
+}
+
+function promptSnapshotCards(column: AgentBoardBoard["columns"][number]) {
+  if (column.id !== "closed") return column.cards
+  return [...column.cards].sort(
+    (a, b) => closedSortTimestamp(b) - closedSortTimestamp(a) || a.issue.id.localeCompare(b.issue.id),
+  )
 }
 
 function agentBoardSuggestionPrompt(current: AgentBoardBoard | undefined) {
@@ -2077,13 +2153,15 @@ function agentBoardSuggestionPrompt(current: AgentBoardBoard | undefined) {
   if (current?.columns.length) {
     lines.push("", "Current Beads board snapshot:")
     for (const column of current.columns) {
-      lines.push(`- ${column.title}: ${column.cards.length}`)
-      for (const card of column.cards.slice(0, 5)) {
+      const cards = promptSnapshotCards(column)
+      const detail = column.id === "closed" ? " (most recently closed first)" : ""
+      lines.push(`- ${column.title}: ${cards.length}${detail}`)
+      for (const card of cards.slice(0, 5)) {
         const status = visibleStatus(card)
         const priority = card.issue.priority !== undefined ? `P${card.issue.priority}` : "no priority"
         lines.push(`  - ${card.issue.id} [${status}, ${priority}]: ${card.issue.title}`)
       }
-      if (column.cards.length > 5) lines.push(`  - ...${column.cards.length - 5} more`)
+      if (cards.length > 5) lines.push(`  - ...${cards.length - 5} more`)
     }
   }
 
@@ -2137,14 +2215,18 @@ export default function AgentBoardPage() {
   const [activeColumnDropPlacement, setActiveColumnDropPlacement] = createSignal<ColumnDropPlacement>()
   const [dragSnapshot, setDragSnapshot] = createSignal<AgentBoardBoard>()
   const [cardDragPointer, setCardDragPointer] = createSignal<{ x: number; y: number }>()
+  let pendingCardDrag: PendingCardDrag | undefined
   const [dragPreviewWidth, setDragPreviewWidth] = createSignal<number>()
   const [dragPlaceholderHeight, setDragPlaceholderHeight] = createSignal<number>()
   const [activeColumnDrag, setActiveColumnDrag] = createSignal<AgentBoardColumnID>()
   const [boardOrder, setBoardOrder] = createSignal<BoardLocalOrder>(loadBoardOrder(sdk.directory))
   const [query, setQuery] = createSignal("")
+  const [viewMode, setViewMode] = createSignal<AgentBoardViewMode>("board")
   const [drawerTab, setDrawerTab] = createSignal<DrawerTab>("details")
   const [drawerID, setDrawerID] = createSignal<string>()
   const [drawerOpen, setDrawerOpen] = createSignal(false)
+  const [titlebarCenterMount, setTitlebarCenterMount] = createSignal<HTMLElement | null>(null)
+  const [titlebarRightMount, setTitlebarRightMount] = createSignal<HTMLElement | null>(null)
   const [notifyEnabled, setNotifyEnabled] = createSignal(false)
   const [notifyPermission, setNotifyPermission] = createSignal<NotificationPermission>("default")
   let searchRef: HTMLInputElement | undefined
@@ -2236,9 +2318,7 @@ export default function AgentBoardPage() {
       }),
     }))
   })
-  const visibleCardCount = createMemo(() =>
-    filteredColumns().reduce((total, column) => total + column.cards.length, 0),
-  )
+  const visibleCardCount = createMemo(() => filteredColumns().reduce((total, column) => total + column.cards.length, 0))
   let drawerTimer: number | undefined
   let drawerFrame: number | undefined
   let lastValidDragTarget: BoardDragTarget | undefined
@@ -2524,11 +2604,11 @@ export default function AgentBoardPage() {
       lastDragKey = undefined
       return
     }
-
   }
 
   function clearDragState(snapshot?: AgentBoardBoard) {
     cleanupCardPointerDrag()
+    pendingCardDrag = undefined
     setActiveDrag(undefined)
     setActiveDragOrigin(undefined)
     setActiveDropTarget(undefined)
@@ -2648,7 +2728,10 @@ export default function AgentBoardPage() {
     return undefined
   }
 
-  function resolveCardDragTarget(issueID: string | undefined, source = dragSnapshot() ?? board()): BoardDragTarget | undefined {
+  function resolveCardDragTarget(
+    issueID: string | undefined,
+    source = dragSnapshot() ?? board(),
+  ): BoardDragTarget | undefined {
     if (!issueID || !source) return
     const card = findCard(source, issueID)
     if (!card) return
@@ -2693,30 +2776,43 @@ export default function AgentBoardPage() {
 
   function startCardDrag(event: PointerEvent, card: AgentBoardCard) {
     if (event.button !== 0) return
-    const element = event.currentTarget instanceof HTMLElement
-      ? event.currentTarget.closest<HTMLElement>("[data-agentboard-card]")
-      : undefined
+    const element =
+      event.currentTarget instanceof HTMLElement
+        ? event.currentTarget.closest<HTMLElement>("[data-agentboard-card]")
+        : undefined
     const rect = element?.getBoundingClientRect()
     const current = board()
     if (!rect || !current) return
+    pendingCardDrag = {
+      card,
+      current,
+      rect,
+      startX: event.clientX,
+      startY: event.clientY,
+    }
+    window.addEventListener("pointermove", handleCardPointerMove, BOARD_POINTER_OPTIONS)
+    window.addEventListener("pointerup", handleCardPointerUp, BOARD_POINTER_OPTIONS)
+  }
+
+  function activatePendingCardDrag(event: PointerEvent, pending: PendingCardDrag) {
     event.preventDefault()
     event.stopPropagation()
     boardDragPointer = { x: event.clientX, y: event.clientY }
     setCardDragPointer(boardDragPointer)
-    boardDragGrabOffset = { x: event.clientX - rect.left, y: event.clientY - rect.top }
-    boardDragSourceSize = { width: rect.width, height: rect.height }
-    setActiveDrag(card.issue.id)
-    setActiveDragOrigin(card.column)
-    setActiveDropTarget(card.column)
-    setActiveDropPlacement({ column: card.column, beforeIssueID: card.issue.id })
+    boardDragGrabOffset = { x: pending.startX - pending.rect.left, y: pending.startY - pending.rect.top }
+    boardDragSourceSize = { width: pending.rect.width, height: pending.rect.height }
+    setActiveDrag(pending.card.issue.id)
+    setActiveDragOrigin(pending.card.column)
+    setActiveDropTarget(pending.card.column)
+    setActiveDropPlacement({ column: pending.card.column, beforeIssueID: pending.card.issue.id })
     setActiveColumnDropPlacement(undefined)
-    setDragPreviewWidth(rect.width)
-    setDragPlaceholderHeight(rect.height)
-    setDragSnapshot(current)
+    setDragPreviewWidth(pending.rect.width)
+    setDragPlaceholderHeight(pending.rect.height)
+    setDragSnapshot(pending.current)
     lastValidDragTarget = undefined
     lastDragKey = undefined
-    window.addEventListener("pointermove", handleCardPointerMove, BOARD_POINTER_OPTIONS)
-    window.addEventListener("pointerup", handleCardPointerUp, BOARD_POINTER_OPTIONS)
+    pendingCardDrag = undefined
+    updateCardDropTarget(pending.card.issue.id)
   }
 
   function cleanupCardPointerDrag() {
@@ -2725,6 +2821,13 @@ export default function AgentBoardPage() {
   }
 
   function handleCardPointerMove(event: PointerEvent) {
+    const pending = pendingCardDrag
+    if (pending && !activeDrag()) {
+      const moved = Math.hypot(event.clientX - pending.startX, event.clientY - pending.startY)
+      if (moved < CARD_DRAG_THRESHOLD) return
+      activatePendingCardDrag(event, pending)
+    }
+    if (!activeDrag()) return
     event.preventDefault()
     trackBoardDragPointer(event)
     setCardDragPointer(boardDragPointer)
@@ -2763,6 +2866,15 @@ export default function AgentBoardPage() {
   }
 
   function handleCardPointerUp(event: PointerEvent) {
+    if (pendingCardDrag && !activeDrag()) {
+      pendingCardDrag = undefined
+      cleanupCardPointerDrag()
+      return
+    }
+    if (!activeDrag()) {
+      cleanupCardPointerDrag()
+      return
+    }
     event.preventDefault()
     finishCardDrag(event)
   }
@@ -2813,6 +2925,8 @@ export default function AgentBoardPage() {
   }
 
   onMount(() => {
+    setTitlebarCenterMount(document.getElementById("opencode-titlebar-center"))
+    setTitlebarRightMount(document.getElementById("opencode-titlebar-right"))
     if (typeof Notification !== "undefined") {
       setNotifyPermission(Notification.permission)
       try {
@@ -2846,9 +2960,81 @@ export default function AgentBoardPage() {
     })
   })
 
+  const modeSwitch = () => (
+    <div class="hidden h-6 items-center overflow-hidden rounded-md border border-border-weak-base bg-surface-panel shadow-xs-border-base md:flex">
+      <For
+        each={
+          [
+            { id: "board" as const, label: "Board", icon: "checklist" as const },
+            { id: "graph" as const, label: "Graph", icon: "branch" as const },
+          ] as const
+        }
+      >
+        {(value) => (
+          <button
+            type="button"
+            class="inline-flex h-full items-center gap-1.5 border-r border-border-weak-base px-2 text-10-semibold transition-colors last:border-r-0"
+            classList={{
+              "bg-surface-raised-base-active text-text-strong": viewMode() === value.id,
+              "text-text-weak hover:bg-surface-raised-base hover:text-text-base": viewMode() !== value.id,
+            }}
+            onClick={() => setViewMode(value.id)}
+          >
+            <Icon name={value.icon} size="small" class="size-3" />
+            <span>{value.label}</span>
+          </button>
+        )}
+      </For>
+      <button
+        type="button"
+        class="inline-flex h-full items-center gap-1.5 px-2 text-10-semibold text-text-weak transition-colors hover:bg-surface-raised-base hover:text-text-base"
+        onClick={() => navigate(`/${base64Encode(sdk.directory)}/session`)}
+      >
+        <Icon name="bubble-5" size="small" class="size-3" />
+        <span>Chat</span>
+      </button>
+    </div>
+  )
+
   return (
-    <div class="isolate flex size-full min-h-0 bg-background-base text-text-base">
+    <>
+      <Show when={titlebarCenterMount()}>
+        {(mount) => (
+          <Portal mount={mount()}>
+            <SearchField
+              value={query()}
+              visible={visibleCardCount()}
+              total={stats().total}
+              onInput={(value) => {
+                setQuery(value)
+              }}
+              onClear={() => setQuery("")}
+            />
+          </Portal>
+        )}
+      </Show>
+      <Show when={titlebarRightMount()}>
+        {(mount) => (
+          <Portal mount={mount()}>
+            <div class="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                icon="reset"
+                class="titlebar-icon h-6 w-8 p-0"
+                onClick={() => void load()}
+                disabled={loading()}
+                aria-label="Refresh AgentBoard"
+                title="Refresh AgentBoard"
+              >
+              </Button>
+              {modeSwitch()}
+            </div>
+          </Portal>
+        )}
+      </Show>
+      <div class="isolate flex size-full min-h-0 bg-background-base text-text-base">
       <main class="flex min-w-0 flex-1 flex-col">
+        <Show when={!titlebarCenterMount() || !titlebarRightMount()}>
         <header class="shrink-0 border-b border-border-weaker-base bg-background-base px-5 py-3">
           <div class="flex items-center justify-between gap-4">
             <div class="flex min-w-0 items-center gap-2.5">
@@ -2861,57 +3047,27 @@ export default function AgentBoardPage() {
             </div>
 
             <div class="flex shrink-0 items-center gap-2">
-              <SearchField
-                value={query()}
-                visible={visibleCardCount()}
-                total={stats().total}
-                onInput={(value) => {
-                  setQuery(value)
-                }}
-                onClear={() => setQuery("")}
-              />
-              <Button
-                variant="primary"
-                size="small"
-                icon="bubble-5"
-                disabled={readyCards().length === 0 || !!busy()}
-                onClick={() => {
-                  const next = readyCards()[0]
-                  if (next) openIssueChat(next.issue.id)
-                }}
-              >
-                {readyCards().length > 1 ? `Chat next (${readyCards().length})` : "Chat next"}
-              </Button>
-              <button
-                type="button"
-                class="relative flex h-7 items-center gap-1.5 rounded-md bg-surface-raised-base px-2.5 text-12-semibold transition-colors hover:bg-surface-raised-base-hover"
-                classList={{
-                  "text-text-strong": notifyEnabled(),
-                  "text-text-weak": !notifyEnabled(),
-                }}
-                onClick={() => void toggleNotifications()}
-                title={
-                  notifyEnabled()
-                    ? "Notifications on — click to disable"
-                    : notifyPermission() === "denied"
-                      ? "Notifications blocked in your browser"
-                      : "Notify me when an agent needs review"
-                }
-                aria-pressed={notifyEnabled()}
-                aria-label="Toggle notifications"
-              >
-                <Icon name="eye" class="size-3.5" />
-                <span class="hidden xl:inline">{notifyEnabled() ? "Alerts on" : "Alerts"}</span>
-                <Show when={notifyEnabled()}>
-                  <span class="absolute right-1.5 top-1 size-1.5 rounded-full bg-surface-success-strong" />
-                </Show>
-              </button>
-              <Button variant="secondary" size="small" icon="reset" onClick={() => void load()} disabled={loading()}>
-                Refresh
-              </Button>
+              <Show when={!titlebarCenterMount()}>
+                <SearchField
+                  value={query()}
+                  visible={visibleCardCount()}
+                  total={stats().total}
+                  onInput={(value) => {
+                    setQuery(value)
+                  }}
+                  onClear={() => setQuery("")}
+                />
+              </Show>
+              <Show when={!titlebarRightMount()}>
+                <Button variant="secondary" size="small" icon="reset" onClick={() => void load()} disabled={loading()}>
+                  Refresh
+                </Button>
+                {modeSwitch()}
+              </Show>
             </div>
           </div>
         </header>
+        </Show>
 
         <div class="min-h-0 flex-1 overflow-hidden">
           <Show
@@ -2931,7 +3087,7 @@ export default function AgentBoardPage() {
               )
             }
           >
-            {(_current) => (
+            {(current) => (
               <Show
                 when={!isBoardEmpty()}
                 fallback={
@@ -2964,99 +3120,124 @@ export default function AgentBoardPage() {
                   </div>
                 }
               >
-                <DragDropProvider
-                  onDragStart={handleDragStart}
-                  onDragMove={handleDragMove}
-                  onDragEnd={handleDragEnd}
-                >
-                  <DragDropSensors />
-                  <div class="flex h-full flex-col">
-                    <div class="min-h-0 flex-1 overflow-x-auto px-4 pt-4">
-                      <div class="grid h-full min-w-[1200px] grid-cols-5 gap-3">
-                        <For each={filteredColumns()}>
-                          {(column) => (
-                            <>
-                              <Show
-                                when={
-                                  activeColumnDrag() &&
-                                  activeColumnDropPlacement()?.beforeColumnID === column.id
-                                }
-                              >
-                                <ColumnDropPlaceholder height={dragPlaceholderHeight()} />
-                              </Show>
-                              <BoardColumn
-                                column={column}
-                                selectedID={selectedID()}
-                                busy={busy()}
-                                activeDrag={activeDrag()}
-                                activeColumnDrag={activeColumnDrag()}
-                                activeTarget={activeDropTarget()}
-                                dropPlacement={activeDropPlacement()}
-                                placeholderHeight={dragPlaceholderHeight()}
-                                onSelect={selectCard}
-                                onChat={openIssueChat}
-                                onAdvance={handleAdvance}
-                                onCardDragStart={startCardDrag}
-                              />
-                            </>
-                          )}
-                        </For>
-                        <Show when={activeColumnDrag() && !activeColumnDropPlacement()?.beforeColumnID}>
-                          <ColumnDropPlaceholder height={dragPlaceholderHeight()} />
-                        </Show>
+                <Show
+                  when={viewMode() === "graph"}
+                  fallback={
+                    <DragDropProvider
+                      onDragStart={handleDragStart}
+                      onDragMove={handleDragMove}
+                      onDragEnd={handleDragEnd}
+                    >
+                      <DragDropSensors />
+                      <div class="flex h-full flex-col">
+                        <div class="min-h-0 flex-1 overflow-x-auto px-4 pt-4">
+                          <div class="grid h-full min-w-[1200px] grid-cols-5 gap-3">
+                            <For each={filteredColumns()}>
+                              {(column) => (
+                                <>
+                                  <Show
+                                    when={
+                                      activeColumnDrag() && activeColumnDropPlacement()?.beforeColumnID === column.id
+                                    }
+                                  >
+                                    <ColumnDropPlaceholder height={dragPlaceholderHeight()} />
+                                  </Show>
+                                  <BoardColumn
+                                    column={column}
+                                    selectedID={selectedID()}
+                                    busy={busy()}
+                                    activeDrag={activeDrag()}
+                                    activeDragCard={activeDragCard()}
+                                    activeColumnDrag={activeColumnDrag()}
+                                    activeTarget={activeDropTarget()}
+                                    dropPlacement={activeDropPlacement()}
+                                    placeholderHeight={dragPlaceholderHeight()}
+                                    onSelect={selectCard}
+                                    onChat={openIssueChat}
+                                    onAdvance={handleAdvance}
+                                    onCardDragStart={startCardDrag}
+                                  />
+                                </>
+                              )}
+                            </For>
+                            <Show when={activeColumnDrag() && !activeColumnDropPlacement()?.beforeColumnID}>
+                              <ColumnDropPlaceholder height={dragPlaceholderHeight()} />
+                            </Show>
+                          </div>
+                        </div>
+                        <div class="shrink-0 border-t border-border-weaker-base bg-background-base px-4 py-3">
+                          <IssueComposer
+                            variant="inline"
+                            knownLabels={knownLabels()}
+                            busy={!!busy()}
+                            onSubmit={createIssue}
+                            onPlan={planInChat}
+                            onSuggest={suggestInChat}
+                          />
+                        </div>
                       </div>
-                    </div>
-                    <div class="shrink-0 border-t border-border-weaker-base bg-background-base px-4 py-3">
-                      <IssueComposer
-                        variant="inline"
-                        knownLabels={knownLabels()}
-                        busy={!!busy()}
-                        onSubmit={createIssue}
-                        onPlan={planInChat}
-                        onSuggest={suggestInChat}
-                      />
-                    </div>
-                  </div>
-                  <Show when={activeCardDragLayer()}>
-                    {(drag) => (
-                      <CardDragLayer
-                        card={drag().card}
-                        point={drag().point}
-                        offset={drag().offset}
-                        width={drag().width}
-                        height={drag().height}
-                      />
-                    )}
-                  </Show>
-                  <DragOverlay
-                    class="pointer-events-none z-[10000]"
-                    style={{
-                      "z-index": 10000,
-                      "pointer-events": "none",
-                      "min-width": dragPreviewWidth() ? `${dragPreviewWidth()}px` : undefined,
-                      "min-height": dragPlaceholderHeight() ? `${dragPlaceholderHeight()}px` : undefined,
+                      <Show when={activeCardDragLayer()}>
+                        {(drag) => (
+                          <CardDragLayer
+                            card={drag().card}
+                            point={drag().point}
+                            offset={drag().offset}
+                            width={drag().width}
+                            height={drag().height}
+                          />
+                        )}
+                      </Show>
+                      <DragOverlay
+                        class="pointer-events-none z-[10000]"
+                        style={{
+                          "z-index": 10000,
+                          "pointer-events": "none",
+                          "min-width": dragPreviewWidth() ? `${dragPreviewWidth()}px` : undefined,
+                          "min-height": dragPlaceholderHeight() ? `${dragPlaceholderHeight()}px` : undefined,
+                        }}
+                      >
+                        {(draggable) => {
+                          const dragID = draggable?.id?.toString()
+                          const columnID = parseColumnDragID(dragID)
+                          const column = columnID
+                            ? (dragSnapshot() ?? board())?.columns.find((item) => item.id === columnID)
+                            : undefined
+                          return (
+                            <Show when={column}>
+                              {(value) => (
+                                <ColumnPreview
+                                  column={value()}
+                                  width={dragPreviewWidth()}
+                                  height={dragPlaceholderHeight()}
+                                />
+                              )}
+                            </Show>
+                          )
+                        }}
+                      </DragOverlay>
+                    </DragDropProvider>
+                  }
+                >
+                  <GraphMode
+                    board={current()}
+                    query={query()}
+                    selectedID={selectedID()}
+                    busy={busy()}
+                    onSelect={selectCard}
+                    onChat={openIssueChat}
+                    onSavePositions={(positions) => {
+                      void client()
+                        .saveGraphPositions(positions)
+                        .catch((err) => {
+                          showToast({
+                            variant: "error",
+                            title: "Could not save graph layout",
+                            description: err instanceof Error ? err.message : String(err),
+                          })
+                        })
                     }}
-                  >
-                    {(draggable) => {
-                      const dragID = draggable?.id?.toString()
-                      const columnID = parseColumnDragID(dragID)
-                      const column = columnID
-                        ? (dragSnapshot() ?? board())?.columns.find((item) => item.id === columnID)
-                        : undefined
-                      return (
-                        <Show when={column}>
-                          {(value) => (
-                            <ColumnPreview
-                              column={value()}
-                              width={dragPreviewWidth()}
-                              height={dragPlaceholderHeight()}
-                            />
-                          )}
-                        </Show>
-                      )
-                    }}
-                  </DragOverlay>
-                </DragDropProvider>
+                  />
+                </Show>
               </Show>
             )}
           </Show>
@@ -3112,6 +3293,7 @@ export default function AgentBoardPage() {
           </div>
         )}
       </Show>
-    </div>
+      </div>
+    </>
   )
 }

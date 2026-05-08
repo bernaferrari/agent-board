@@ -1,5 +1,5 @@
 import { Instance } from "@/project/instance"
-import { Beads } from "./beads"
+import { Beads, dependenciesFromRawIssues } from "./beads"
 import { AgentBoardReconciler } from "./reconcile"
 import { AgentBoardStore } from "./store"
 import type {
@@ -26,7 +26,7 @@ export function columnForIssue(base: AgentBoardColumnID, run?: AgentBoardRun): A
   if (!run) return base
   if (ACTIVE_RUN_STATUS.has(run.status)) return "running"
   if (run.status === "done") return "closed"
-  if ((run.status === "needs_review" || run.status === "failed") && base === "running") return "needs_review"
+  if (run.status === "needs_review" || run.status === "failed") return "needs_review"
   return base
 }
 
@@ -87,6 +87,16 @@ export async function getAgentBoard(): Promise<AgentBoardBoard> {
   }
 
   for (const issue of closed) add(issue, "closed")
+  const issues = Array.from(columns.values()).flatMap((cards) => cards.map((card) => card.issue))
+  const issueIDs = issues.map((issue) => issue.id)
+  const issueIDSet = new Set(issueIDs)
+  let dependencies = dependenciesFromRawIssues(issues)
+  try {
+    const listed = await Beads.listDependencies(worktree, issueIDs)
+    if (listed.length > 0) dependencies = listed
+  } catch {
+    // Older bd versions or projects without dependency support still get raw-field graph edges.
+  }
 
   return {
     project,
@@ -98,5 +108,11 @@ export async function getAgentBoard(): Promise<AgentBoardBoard> {
         cards: columns.get(id)!,
       }),
     ),
+    graph: {
+      dependencies: dependencies.filter(
+        (dependency) => issueIDSet.has(dependency.fromIssueID) && issueIDSet.has(dependency.toIssueID),
+      ),
+      positions: AgentBoardStore.listGraphPositions(project.id),
+    },
   }
 }
