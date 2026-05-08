@@ -1,5 +1,6 @@
-import { Button } from "@opencode-ai/ui/button"
 import { Icon } from "@opencode-ai/ui/icon"
+import { IconButton } from "@opencode-ai/ui/icon-button"
+import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js"
 import type { AgentBoardBoard, AgentBoardCard, AgentBoardColumnID, AgentBoardGraphPosition } from "./api"
 import { buildGraphDependencyLayout, getDependencyEdgeNodes } from "./graph-layout"
@@ -7,15 +8,10 @@ import { buildAgentBoardGraph, type AgentBoardGraphNode } from "./graph-state"
 
 export type AgentBoardViewMode = "board" | "graph"
 
-type GraphFilter = "focus" | "all" | "open" | "active" | "critical"
+type GraphFilter = "all" | "open" | "critical"
 
 const GRAPH_NODE_WIDTH = 276
 const GRAPH_NODE_HEIGHT = 124
-const GRAPH_ARCHIVE_GROUP_WIDTH = 260
-const GRAPH_ARCHIVE_GROUP_HEIGHT = 56
-const GRAPH_ARCHIVE_GROUP_GAP = 16
-const GRAPH_FOCUS_CLOSED_PER_DEPTH = 2
-const GRAPH_FOCUS_CLOSED_TOTAL = 8
 const GRAPH_FOCUS_COLUMN_GAP = 500
 const GRAPH_FOCUS_ROW_GAP = 196
 const GRAPH_FOCUS_PADDING = 96
@@ -27,6 +23,13 @@ const GRAPH_EDGE_LANE_STEP = 104
 const GRAPH_EDGE_LANE_ATTEMPTS = 10
 const GRAPH_POINTER_OPTIONS: AddEventListenerOptions = { capture: true }
 const GRAPH_EASE = "cubic-bezier(0.22,1,0.36,1)"
+const MINIMAP_STATUS_FILL: Record<AgentBoardColumnID, string> = {
+  blocked: "#ff7b72",
+  ready: "#7ee787",
+  running: "#f2cc60",
+  needs_review: "#79c0ff",
+  closed: "#d2a8ff",
+}
 
 type GraphPoint = {
   x: number
@@ -43,14 +46,6 @@ type GraphRect = {
 type GraphEdgeShape = {
   line: string
   arrow: string
-}
-
-type GraphArchiveGroup = {
-  id: string
-  x: number
-  y: number
-  depth: number
-  count: number
 }
 
 const COLUMN_ACCENT: Record<AgentBoardColumnID, { dot: string; tint: string; ring: string }> = {
@@ -112,19 +107,13 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
 }
 
-function graphNodeBounds(nodes: AgentBoardGraphNode[], groups: GraphArchiveGroup[] = []) {
+function graphNodeBounds(nodes: AgentBoardGraphNode[]) {
   const items = [
     ...nodes.map((node) => ({
       minX: node.x,
       minY: node.y,
       maxX: node.x + GRAPH_NODE_WIDTH,
       maxY: node.y + GRAPH_NODE_HEIGHT,
-    })),
-    ...groups.map((group) => ({
-      minX: group.x,
-      minY: group.y,
-      maxX: group.x + GRAPH_ARCHIVE_GROUP_WIDTH,
-      maxY: group.y + GRAPH_ARCHIVE_GROUP_HEIGHT,
     })),
   ]
   if (items.length === 0) return { minX: 0, minY: 0, maxX: 1, maxY: 1, width: 1, height: 1 }
@@ -681,37 +670,6 @@ function reduceTransitiveGraphEdges<T extends { sourceIssueID: string; targetIss
   })
 }
 
-function ArchiveGroupCard(props: { group: GraphArchiveGroup; onShowAll: () => void }) {
-  return (
-    <button
-      type="button"
-      class="absolute z-10 flex items-center gap-3 overflow-hidden rounded-lg border border-dashed border-border-weaker-base bg-surface-raised-base/75 px-3 text-left shadow-xs-border-base transition-[border-color,background,box-shadow] duration-150 hover:border-border-strong-base hover:bg-surface-raised-base hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-strong-base"
-      style={{
-        width: `${GRAPH_ARCHIVE_GROUP_WIDTH}px`,
-        height: `${GRAPH_ARCHIVE_GROUP_HEIGHT}px`,
-        transform: `translate3d(${props.group.x}px, ${props.group.y}px, 0)`,
-      }}
-      onClick={(event) => {
-        event.stopPropagation()
-        props.onShowAll()
-      }}
-      onPointerDown={(event) => event.stopPropagation()}
-      aria-label={`Show ${props.group.count} archived graph items`}
-    >
-      <span class="flex size-8 shrink-0 items-center justify-center rounded-md bg-[#8957e5]/12 text-[#d2a8ff] ring-1 ring-inset ring-[#a371f7]/30">
-        <Icon name="archive" class="size-4" />
-      </span>
-      <span class="min-w-0 flex-1">
-        <span class="block truncate text-13-semibold text-text-strong">
-          {props.group.count} archived item{props.group.count === 1 ? "" : "s"}
-        </span>
-        <span class="block truncate text-11-regular text-text-weak">Switch to all nodes</span>
-      </span>
-      <Icon name="arrow-right" class="size-3.5 shrink-0 text-text-weak" />
-    </button>
-  )
-}
-
 function GraphNodeCard(props: {
   node: AgentBoardGraphNode
   selected: boolean
@@ -767,9 +725,8 @@ function GraphNodeCard(props: {
       </Show>
       <div class="flex h-5 items-center gap-1.5">
         <span
-          class={`inline-flex min-w-0 max-w-[8.5rem] items-center gap-1 rounded-full px-1.5 py-0.5 text-10-semibold ring-1 ring-inset ${accent().tint} ${accent().ring}`}
+          class={`inline-flex min-w-0 max-w-[8.5rem] items-center rounded-full px-1.5 py-0.5 text-10-semibold ring-1 ring-inset ${accent().tint} ${accent().ring}`}
         >
-          <span class={`size-1.5 shrink-0 rounded-full ${accent().dot}`} />
           <span class="truncate">{statusLabel(status())}</span>
         </span>
         <Show when={card().issue.priority !== undefined}>
@@ -824,16 +781,24 @@ export function GraphMode(props: {
   onSavePositions: (positions: AgentBoardGraphPosition[]) => void
 }) {
   const [viewport, setViewport] = createSignal({ x: 40, y: 40, scale: 1 })
-  const [filter, setFilter] = createSignal<GraphFilter>("focus")
+  const [filter, setFilter] = createSignal<GraphFilter>("open")
   const [hideClosed, setHideClosed] = createSignal(true)
   const [dependencyLayers, setDependencyLayers] = createSignal<Record<string, number>>({})
   const [hoveredID, setHoveredID] = createSignal<string>()
+  const [autoPositions, setAutoPositions] = createSignal<Record<string, AgentBoardGraphPosition>>({})
+  const [autoPositionsSignature, setAutoPositionsSignature] = createSignal("")
   const [localPositions, setLocalPositions] = createSignal<Record<string, AgentBoardGraphPosition>>({})
   const [manuallyMovedIDs, setManuallyMovedIDs] = createSignal<Set<string>>(new Set())
   const [userEditedGraph, setUserEditedGraph] = createSignal(false)
-  let rootRef: HTMLDivElement | undefined
+  const [rootElement, setRootElement] = createSignal<HTMLDivElement>()
   let arrangedSignature = ""
   let didDrag = false
+  let minimapPointer:
+    | {
+        rect: DOMRect
+        bounds: ReturnType<typeof graphBounds>
+      }
+    | undefined
   let pointer:
     | {
         type: "pan"
@@ -865,76 +830,27 @@ export function GraphMode(props: {
       height: Math.max(baseGraph().height, ...nodes.map((node) => node.y + GRAPH_NODE_HEIGHT + 96)),
     }
   })
-  const focusClosedIDs = createMemo(() => {
-    const current = graph()
-    const nonClosedIDs = new Set(current.nodes.filter((node) => node.card.column !== "closed").map((node) => node.id))
-    const closedContextIDs = new Set<string>()
-    for (const edge of current.edges) {
-      if (nonClosedIDs.has(edge.sourceIssueID)) closedContextIDs.add(edge.targetIssueID)
-      if (nonClosedIDs.has(edge.targetIssueID)) closedContextIDs.add(edge.sourceIssueID)
-    }
-    const forcedClosedIDs = new Set<string>()
-    const focusedClosedByDepth = new Map<number, AgentBoardGraphNode[]>()
-    for (const node of current.nodes) {
-      if (node.card.column !== "closed") continue
-      if (node.pinned || node.id === props.selectedID || node.id === hoveredID()) {
-        forcedClosedIDs.add(node.id)
-        continue
-      }
-      if (!closedContextIDs.has(node.id)) continue
-      focusedClosedByDepth.set(node.depth, [...(focusedClosedByDepth.get(node.depth) ?? []), node])
-    }
-    const scoreClosedNode = (a: AgentBoardGraphNode, b: AgentBoardGraphNode) =>
-      b.unblocks - a.unblocks ||
-      b.blockedBy - a.blockedBy ||
-      priorityRank(a.card.issue.priority) - priorityRank(b.card.issue.priority) ||
-      a.id.localeCompare(b.id)
-    const focusedClosedIDs = new Set(forcedClosedIDs)
-    const candidates: AgentBoardGraphNode[] = []
-    for (const nodes of focusedClosedByDepth.values()) {
-      candidates.push(
-        ...nodes
-          .sort(scoreClosedNode)
-          .slice(0, GRAPH_FOCUS_CLOSED_PER_DEPTH),
-      )
-    }
-    for (const node of candidates.sort(scoreClosedNode)) {
-      if (focusedClosedIDs.size >= GRAPH_FOCUS_CLOSED_TOTAL + forcedClosedIDs.size) break
-      focusedClosedIDs.add(node.id)
-    }
-    return focusedClosedIDs
-  })
   const graphFilterCounts = createMemo(() => {
     const current = graph()
-    const focusedClosed = focusClosedIDs()
     const count = (value: GraphFilter) =>
       current.nodes.filter((node) => {
         if (hideClosed() && node.card.column === "closed") return false
-        if (value === "active") return node.card.column === "running" || node.card.column === "needs_review"
         if (value === "critical") return node.critical
-        if (value === "focus") return node.card.column !== "closed" || focusedClosed.has(node.id)
         if (value === "open") return node.card.column !== "closed"
         return true
       }).length
     return {
-      focus: count("focus"),
       open: count("open"),
-      active: count("active"),
       critical: count("critical"),
       all: count("all"),
       closed: current.nodes.filter((node) => node.card.column === "closed").length,
     }
   })
-  const visibleGraph = createMemo(() => {
+  const visibleGraphInput = createMemo(() => {
     const current = graph()
-    const focusedClosedIDs = focusClosedIDs()
     const rawNodes = current.nodes.filter((node) => {
       if (hideClosed() && node.card.column === "closed") return false
-      if (filter() === "active") return node.card.column === "running" || node.card.column === "needs_review"
       if (filter() === "critical") return node.critical
-      if (filter() === "focus") {
-        return node.card.column !== "closed" || focusedClosedIDs.has(node.id)
-      }
       if (filter() === "open") return node.card.column !== "closed"
       return true
     })
@@ -942,6 +858,23 @@ export function GraphMode(props: {
     const edges = reduceTransitiveGraphEdges(
       current.edges.filter((edge) => ids.has(edge.sourceIssueID) && ids.has(edge.targetIssueID)),
     )
+    const signature = [
+      filter(),
+      hideClosed() ? "closed:hidden" : "closed:visible",
+      rawNodes
+        .map((node) => node.id)
+        .sort()
+        .join(","),
+      edges
+        .map((edge) => edge.id)
+        .sort()
+        .join(","),
+    ].join("|")
+    return { current, rawNodes, edges, signature }
+  })
+  const visibleGraph = createMemo(() => {
+    const input = visibleGraphInput()
+    const { current, rawNodes, edges } = input
     const visibleBlockedBy = new Map(rawNodes.map((node) => [node.id, 0]))
     const visibleUnblocks = new Map(rawNodes.map((node) => [node.id, 0]))
     for (const edge of edges) {
@@ -954,11 +887,21 @@ export function GraphMode(props: {
       unblocks: visibleUnblocks.get(node.id) ?? 0,
     }))
     const automaticNodes = resolveGraphNodeOverlaps(buildGraphSeedNodes(nodesWithVisibleCounts, edges))
+    const auto = autoPositionsSignature() === input.signature ? autoPositions() : {}
     const nodes = automaticNodes.map((node) => {
+      const autoPosition = auto[node.id]
+      const automatic = autoPosition
+        ? {
+            ...node,
+            x: autoPosition.x,
+            y: autoPosition.y,
+            pinned: autoPosition.pinned,
+          }
+        : node
       const position = localPositions()[node.id]
-      if (!position || !manuallyMovedIDs().has(node.id)) return node
+      if (!position || !manuallyMovedIDs().has(node.id)) return automatic
       return {
-        ...node,
+        ...automatic,
         x: position.x,
         y: position.y,
         pinned: position.pinned,
@@ -973,51 +916,11 @@ export function GraphMode(props: {
     }
   })
   const nodeMap = createMemo(() => new Map(visibleGraph().nodes.map((node) => [node.id, node])))
-  const archiveGroups = createMemo(() => {
-    if (filter() !== "focus" || hideClosed()) return []
-    const visibleIDs = new Set(visibleGraph().nodes.map((node) => node.id))
-    const hiddenClosed = graph().nodes.filter((node) => node.card.column === "closed" && !visibleIDs.has(node.id))
-    if (hiddenClosed.length === 0) return []
-    const visible = visibleGraph().nodes
-    const anchorBounds =
-      visible.length > 0
-        ? graphNodeBounds(visible)
-        : {
-            minX: GRAPH_FOCUS_PADDING,
-            minY: GRAPH_FOCUS_PADDING,
-            maxX: GRAPH_FOCUS_PADDING + GRAPH_ARCHIVE_GROUP_WIDTH,
-            maxY: GRAPH_FOCUS_PADDING + GRAPH_ARCHIVE_GROUP_HEIGHT,
-            width: GRAPH_ARCHIVE_GROUP_WIDTH,
-            height: GRAPH_ARCHIVE_GROUP_HEIGHT,
-          }
-    const rowStartX = anchorBounds.minX + Math.max(0, (anchorBounds.width - GRAPH_ARCHIVE_GROUP_WIDTH) / 2)
-    const archiveY = visible.length > 0 ? anchorBounds.maxY + 32 : anchorBounds.minY
-    return [
-      {
-        id: "archive:closed",
-        depth: Math.min(...hiddenClosed.map((node) => node.depth)),
-        count: hiddenClosed.length,
-        x: rowStartX,
-        y: archiveY,
-      },
-    ] satisfies GraphArchiveGroup[]
-  })
-  const graphBounds = createMemo(() => graphNodeBounds(visibleGraph().nodes, archiveGroups()))
+  const graphBounds = createMemo(() => graphNodeBounds(visibleGraph().nodes))
   const graphArrangementSignature = createMemo(() => {
-    const current = visibleGraph()
-    if (current.nodes.length === 0) return ""
-    return [
-      filter(),
-      hideClosed() ? "closed:hidden" : "closed:visible",
-      current.nodes
-        .map((node) => node.id)
-        .sort()
-        .join(","),
-      current.edges
-        .map((edge) => edge.id)
-        .sort()
-        .join(","),
-    ].join("|")
+    const input = visibleGraphInput()
+    if (input.rawNodes.length === 0) return ""
+    return input.signature
   })
   const canvasSize = createMemo(() => {
     const bounds = graphBounds()
@@ -1026,22 +929,44 @@ export function GraphMode(props: {
       height: Math.max(560, bounds.maxY + 96),
     }
   })
-  const viewportBounds = createMemo(() => {
-    const rect = rootRef?.getBoundingClientRect()
-    if (!rect) return undefined
+  const minimapWorldBounds = createMemo(() => {
     const bounds = graphBounds()
-    const current = viewport()
-    const rawLeft = (-current.x / current.scale - bounds.minX) / bounds.width
-    const rawTop = (-current.y / current.scale - bounds.minY) / bounds.height
-    const rawWidth = rect.width / current.scale / bounds.width
-    const rawHeight = rect.height / current.scale / bounds.height
-    const width = clamp(rawWidth * 100, 8, 100)
-    const height = clamp(rawHeight * 100, 8, 100)
+    const canvas = canvasSize()
+    const minX = Math.min(0, bounds.minX - 96)
+    const minY = Math.min(0, bounds.minY - 96)
+    const maxX = Math.max(canvas.width, bounds.maxX + 96)
+    const maxY = Math.max(canvas.height, bounds.maxY + 96)
     return {
-      left: clamp(rawLeft * 100, 0, 100 - width),
-      top: clamp(rawTop * 100, 0, 100 - height),
-      width,
-      height,
+      minX,
+      minY,
+      maxX,
+      maxY,
+      width: Math.max(1, maxX - minX),
+      height: Math.max(1, maxY - minY),
+    }
+  })
+  const viewportBounds = createMemo(() => {
+    const rect = rootElement()?.getBoundingClientRect()
+    if (!rect) return undefined
+    const bounds = minimapWorldBounds()
+    const current = viewport()
+    const worldLeft = -current.x / current.scale
+    const worldTop = -current.y / current.scale
+    const worldWidth = rect.width / current.scale
+    const worldHeight = rect.height / current.scale
+    const rawLeft = ((worldLeft - bounds.minX) / bounds.width) * 100
+    const rawTop = ((worldTop - bounds.minY) / bounds.height) * 100
+    const rawRight = rawLeft + (worldWidth / bounds.width) * 100
+    const rawBottom = rawTop + (worldHeight / bounds.height) * 100
+    const left = clamp(rawLeft, 0, 100)
+    const top = clamp(rawTop, 0, 100)
+    const right = clamp(rawRight, 0, 100)
+    const bottom = clamp(rawBottom, 0, 100)
+    return {
+      left,
+      top,
+      width: Math.max(2, right - left),
+      height: Math.max(2, bottom - top),
     }
   })
   const focusID = createMemo(() => hoveredID() ?? props.selectedID)
@@ -1062,7 +987,7 @@ export function GraphMode(props: {
     const id = focusID()
     const layers = dependencyLayers()
     const pairCounts = new Map<string, number>()
-    return current.edges.map((edge) => {
+    return current.edges.map((edge, index) => {
       const active = id !== undefined && (edge.sourceIssueID === id || edge.targetIssueID === id)
       const muted = id !== undefined && edge.sourceIssueID !== id && edge.targetIssueID !== id
       const source = nodesByID.get(edge.sourceIssueID)
@@ -1073,7 +998,10 @@ export function GraphMode(props: {
       return {
         id: edge.id,
         active,
+        muted,
         critical: edge.critical,
+        paintOrder: active ? 3 : edge.critical ? 2 : muted ? 0 : 1,
+        sourceOrder: index,
         shape: routeGraphEdge(
           source,
           target,
@@ -1082,15 +1010,10 @@ export function GraphMode(props: {
           layers,
           edgeOffset,
         ),
-        tone: active
-          ? "text-border-strong-base/90"
-          : muted
-            ? "text-border-weaker-base/78"
-            : edge.critical
-              ? "text-border-strong-base/90"
-              : "text-border-weaker-base/88",
+        tone: active ? "text-border-strong-base" : edge.critical ? "text-border-strong-base" : "text-border-weaker-base",
+        opacity: active ? 1 : muted ? 0.28 : id !== undefined ? 0.66 : 0.92,
       }
-    })
+    }).sort((a, b) => a.paintOrder - b.paintOrder || a.sourceOrder - b.sourceOrder)
   })
   const stats = createMemo(() => {
     const current = graph()
@@ -1100,7 +1023,6 @@ export function GraphMode(props: {
       edges: current.edges.length,
       visibleNodes: visible.nodes.length,
       hiddenNodes: Math.max(0, current.nodes.length - visible.nodes.length),
-      archiveGroups: archiveGroups().length,
     }
   })
   const columnStats = createMemo(() => {
@@ -1110,9 +1032,28 @@ export function GraphMode(props: {
       .map((column) => ({ column, count: counts.get(column) ?? 0 }))
       .filter((item) => item.count > 0)
   })
+  const minimapNodes = createMemo(() => {
+    const bounds = minimapWorldBounds()
+    return visibleGraph().nodes.map((node) => ({
+      id: node.card.issue.id,
+      column: node.card.column,
+      selected: node.card.issue.id === props.selectedID,
+      x: clamp(((node.x + GRAPH_NODE_WIDTH / 2 - bounds.minX) / bounds.width) * 100, 1.5, 98.5),
+      y: clamp(((node.y + GRAPH_NODE_HEIGHT / 2 - bounds.minY) / bounds.height) * 100, 1.5, 98.5),
+    }))
+  })
+  const minimapEdges = createMemo(() => {
+    const nodes = new Map(minimapNodes().map((node) => [node.id, node]))
+    return visibleGraph().edges.flatMap((edge) => {
+      const source = nodes.get(edge.sourceIssueID)
+      const target = nodes.get(edge.targetIssueID)
+      if (!source || !target) return []
+      return [{ id: edge.id, x1: source.x, y1: source.y, x2: target.x, y2: target.y, critical: edge.critical }]
+    })
+  })
 
   function screenToWorld(clientX: number, clientY: number) {
-    const rect = rootRef?.getBoundingClientRect()
+    const rect = rootElement()?.getBoundingClientRect()
     const current = viewport()
     return {
       x: (clientX - (rect?.left ?? 0) - current.x) / current.scale,
@@ -1121,8 +1062,8 @@ export function GraphMode(props: {
   }
 
   function fitGraph() {
-    const rect = rootRef?.getBoundingClientRect()
-    if (!rect || (visibleGraph().nodes.length === 0 && archiveGroups().length === 0)) return
+    const rect = rootElement()?.getBoundingClientRect()
+    if (!rect || visibleGraph().nodes.length === 0) return
     const bounds = graphBounds()
     const scale = clamp(Math.min((rect.width - 96) / bounds.width, (rect.height - 96) / bounds.height), 0.18, 1.15)
     setViewport({
@@ -1130,6 +1071,44 @@ export function GraphMode(props: {
       x: rect.width / 2 - ((bounds.minX + bounds.maxX) / 2) * scale,
       y: rect.height / 2 - ((bounds.minY + bounds.maxY) / 2) * scale,
     })
+  }
+
+  function moveViewportToMinimapPoint(clientX: number, clientY: number, rect: DOMRect, bounds: ReturnType<typeof graphBounds>) {
+    const rootRect = rootElement()?.getBoundingClientRect()
+    if (!rootRect) return
+    const current = viewport()
+    const ratioX = clamp((clientX - rect.left) / rect.width, 0, 1)
+    const ratioY = clamp((clientY - rect.top) / rect.height, 0, 1)
+    const worldX = bounds.minX + ratioX * bounds.width
+    const worldY = bounds.minY + ratioY * bounds.height
+    setViewport({
+      ...current,
+      x: rootRect.width / 2 - worldX * current.scale,
+      y: rootRect.height / 2 - worldY * current.scale,
+    })
+  }
+
+  function onMinimapPointerMove(event: PointerEvent) {
+    if (!minimapPointer) return
+    event.preventDefault()
+    moveViewportToMinimapPoint(event.clientX, event.clientY, minimapPointer.rect, minimapPointer.bounds)
+  }
+
+  function onMinimapPointerUp() {
+    minimapPointer = undefined
+    window.removeEventListener("pointermove", onMinimapPointerMove, GRAPH_POINTER_OPTIONS)
+    window.removeEventListener("pointerup", onMinimapPointerUp, GRAPH_POINTER_OPTIONS)
+  }
+
+  function beginMinimapPointer(event: PointerEvent) {
+    const rect = event.currentTarget instanceof HTMLElement ? event.currentTarget.getBoundingClientRect() : undefined
+    if (!rect) return
+    event.preventDefault()
+    event.stopPropagation()
+    minimapPointer = { rect, bounds: minimapWorldBounds() }
+    moveViewportToMinimapPoint(event.clientX, event.clientY, rect, minimapPointer.bounds)
+    window.addEventListener("pointermove", onMinimapPointerMove, GRAPH_POINTER_OPTIONS)
+    window.addEventListener("pointerup", onMinimapPointerUp, GRAPH_POINTER_OPTIONS)
   }
 
   function selectFilter(value: GraphFilter) {
@@ -1153,9 +1132,7 @@ export function GraphMode(props: {
     const x = pointer.originX + (event.clientX - pointer.startX) / scale
     const y = pointer.originY + (event.clientY - pointer.startY) / scale
     const issueID = pointer.issueID
-    if (filter() !== "all") {
-      setManuallyMovedIDs((current) => new Set(current).add(issueID))
-    }
+    setManuallyMovedIDs((current) => new Set(current).add(issueID))
     setUserEditedGraph(true)
     setLocalPositions((current) => ({
       ...current,
@@ -1195,8 +1172,8 @@ export function GraphMode(props: {
     event.preventDefault()
     const before = screenToWorld(event.clientX, event.clientY)
     const current = viewport()
-    const scale = clamp(current.scale * Math.exp(-event.deltaY * 0.001), 0.25, 1.6)
-    const rect = rootRef?.getBoundingClientRect()
+    const scale = clamp(current.scale * Math.exp(-event.deltaY * 0.001), 0.15, 1.6)
+    const rect = rootElement()?.getBoundingClientRect()
     setViewport({
       scale,
       x: event.clientX - (rect?.left ?? 0) - before.x * scale,
@@ -1216,12 +1193,8 @@ export function GraphMode(props: {
     if (positions.length === 0) return
     setDependencyLayers(layers)
     setUserEditedGraph(false)
-    setManuallyMovedIDs(new Set(positions.map((position) => position.issueID)))
-    setLocalPositions((current) => ({
-      ...current,
-      ...Object.fromEntries(positions.map((position) => [position.issueID, position])),
-    }))
-    props.onSavePositions(positions)
+    setAutoPositionsSignature(graphArrangementSignature())
+    setAutoPositions(Object.fromEntries(positions.map((position) => [position.issueID, { ...position, pinned: false }])))
     requestAnimationFrame(() => requestAnimationFrame(fitGraph))
   }
 
@@ -1235,92 +1208,95 @@ export function GraphMode(props: {
   onCleanup(() => {
     window.removeEventListener("pointermove", onPointerMove, GRAPH_POINTER_OPTIONS)
     window.removeEventListener("pointerup", onPointerUp, GRAPH_POINTER_OPTIONS)
+    window.removeEventListener("pointermove", onMinimapPointerMove, GRAPH_POINTER_OPTIONS)
+    window.removeEventListener("pointerup", onMinimapPointerUp, GRAPH_POINTER_OPTIONS)
   })
 
   return (
     <div class="relative flex h-full min-h-0 flex-col overflow-hidden bg-background-base">
-      <div class="flex shrink-0 items-center justify-between gap-3 border-b border-border-weaker-base bg-background-base/95 px-4 py-2.5">
-        <div class="flex min-w-0 items-center gap-2">
-          <span class="flex size-6 shrink-0 items-center justify-center rounded-md bg-surface-raised-base text-text-weak shadow-xs-border-base">
-            <Icon name="branch" class="size-3.5" />
-          </span>
-          <div class="min-w-0">
-            <div class="flex items-center gap-2 text-12-semibold text-text-strong">
-              <span>Dependency graph</span>
-              <span class="rounded bg-surface-raised-base px-1.5 py-0.5 font-mono text-10-regular text-text-weak">
-                {stats().visibleNodes}/{stats().nodes} nodes · {stats().edges} links
-              </span>
-            </div>
-            <div class="mt-0.5 truncate text-11-regular text-text-weak">
-              <Show when={stats().hiddenNodes > 0} fallback={<span>Drag nodes freely. Scroll to zoom.</span>}>
-                <span>
-                  {stats().hiddenNodes} archived item{stats().hiddenNodes === 1 ? "" : "s"} grouped
-                  <Show when={stats().archiveGroups > 0}>
-                    {" "}
-                    into {stats().archiveGroups} stack{stats().archiveGroups === 1 ? "" : "s"}
-                  </Show>
-                </span>
-              </Show>
-            </div>
-          </div>
-        </div>
+      <div class="flex h-12 shrink-0 items-center justify-end gap-3 border-b border-border-weaker-base bg-background-base/95 px-4">
         <div class="flex shrink-0 items-center gap-2">
-          <div class="hidden items-center rounded-md bg-surface-raised-base p-0.5 shadow-xs-border-base md:flex">
+          <div class="hidden h-7 items-center gap-0.5 rounded-md bg-surface-raised-base p-0.5 shadow-xs-border-base md:flex">
             <For
               each={
                 [
-                  ["focus", "Focus"],
                   ["open", "Open"],
-                  ["active", "Active"],
                   ["critical", "Risk"],
                   ["all", "All"],
                 ] as const
               }
             >
-              {(value) => (
-                <button
-                  type="button"
-                  class="inline-flex h-6 items-center gap-1 rounded px-1.5 text-10-semibold transition-colors"
-                  classList={{
-                    "bg-background-base text-text-strong shadow-xs-border-base": filter() === value[0],
-                    "text-text-weak hover:text-text-base": filter() !== value[0],
-                  }}
-                  onClick={() => selectFilter(value[0])}
-                >
-                  <span>{value[1]}</span>
-                  <span class="rounded bg-background-base px-1 font-mono text-10-regular tabular-nums text-text-weak shadow-xs-border-base">
-                    {graphFilterCounts()[value[0]]}
-                  </span>
-                </button>
-              )}
+              {(value) => {
+                const count = () => graphFilterCounts()[value[0]]
+                const isActive = () => filter() === value[0]
+                const showRiskDot = () => value[0] === "critical" && count() > 0
+                return (
+                  <button
+                    type="button"
+                    class="inline-flex h-6 items-center gap-1.5 rounded px-2 text-11-semibold transition-all"
+                    classList={{
+                      "bg-background-base text-text-strong shadow-xs-border-base": isActive(),
+                      "text-text-weak hover:bg-surface-raised-base-hover hover:text-text-base": !isActive(),
+                    }}
+                    onClick={() => selectFilter(value[0])}
+                  >
+                    <Show when={showRiskDot()}>
+                      <span
+                        class="size-1.5 rounded-full bg-[#f85149]"
+                        classList={{ "opacity-100": isActive(), "opacity-70": !isActive() }}
+                      />
+                    </Show>
+                    <span>{value[1]}</span>
+                    <span
+                      class="rounded-sm px-1 font-mono text-10-regular tabular-nums"
+                      classList={{
+                        "bg-surface-raised-base text-text-strong": isActive(),
+                        "bg-background-base/60 text-text-weak": !isActive(),
+                      }}
+                    >
+                      {count()}
+                    </span>
+                  </button>
+                )
+              }}
             </For>
           </div>
-          <button
-            type="button"
-            class="hidden h-7 items-center gap-1.5 rounded-md bg-surface-raised-base px-2 text-11-semibold text-text-weak transition-colors hover:bg-surface-raised-base-hover hover:text-text-strong lg:inline-flex"
-            onClick={() => {
-              setHideClosed(!hideClosed())
-              requestAnimationFrame(() => requestAnimationFrame(fitGraph))
-            }}
-            aria-pressed={hideClosed()}
-          >
-            <Icon name="eye" class="size-3.5" />
-            <span>{hideClosed() ? "Show closed" : "Hide closed"}</span>
-            <span class="rounded bg-background-base px-1 font-mono text-10-regular tabular-nums text-text-weak shadow-xs-border-base">
-              {graphFilterCounts().closed}
-            </span>
-          </button>
-          <Button variant="secondary" size="small" icon="reset" onClick={fitGraph}>
-            Fit
-          </Button>
-          <Button variant="secondary" size="small" icon="dot-grid" onClick={arrangeGraph}>
-            Arrange
-          </Button>
+          <Tooltip placement="top" value={hideClosed() ? "Show closed issues" : "Hide closed issues"}>
+            <button
+              type="button"
+              class="hidden h-7 items-center gap-1.5 rounded-md px-2 text-11-semibold transition-colors hover:bg-surface-raised-base lg:inline-flex"
+              classList={{
+                "text-text-strong": !hideClosed(),
+                "text-text-weak hover:text-text-base": hideClosed(),
+              }}
+              onClick={() => {
+                setHideClosed(!hideClosed())
+                requestAnimationFrame(() => requestAnimationFrame(fitGraph))
+              }}
+              aria-pressed={!hideClosed()}
+            >
+              <Icon name={hideClosed() ? "eye-off" : "eye"} class="size-3.5" />
+              <span>Closed</span>
+              <span class="font-mono text-10-regular tabular-nums opacity-60">
+                {graphFilterCounts().closed}
+              </span>
+            </button>
+          </Tooltip>
+          <span class="hidden h-4 w-px bg-border-weaker-base lg:block" aria-hidden="true" />
+          <Tooltip placement="top" value="Auto-arrange graph">
+            <IconButton
+              icon="file-tree"
+              variant="ghost"
+              size="normal"
+              onClick={arrangeGraph}
+              aria-label="Auto-arrange graph"
+            />
+          </Tooltip>
         </div>
       </div>
 
       <div
-        ref={rootRef}
+        ref={setRootElement}
         class="relative min-h-0 flex-1 cursor-grab overflow-hidden bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.055)_1px,transparent_0)] bg-[length:28px_28px] active:cursor-grabbing"
         onWheel={onWheel}
         onPointerDown={(event) => {
@@ -1349,10 +1325,7 @@ export function GraphMode(props: {
               {(edge) => (
                 <g
                   class={edge.tone}
-                  classList={{
-                    "opacity-100": edge.active,
-                    "opacity-95": !edge.active && focusID() !== undefined,
-                  }}
+                  opacity={edge.opacity}
                 >
                   <Show when={edge.active}>
                     <path
@@ -1361,8 +1334,8 @@ export function GraphMode(props: {
                       stroke="var(--background-base)"
                       stroke-linecap="round"
                       stroke-linejoin="round"
-                      stroke-width={8}
-                      opacity={0.9}
+                      stroke-width={9}
+                      opacity={0.96}
                     />
                   </Show>
                   <path
@@ -1418,9 +1391,6 @@ export function GraphMode(props: {
               />
             )}
           </For>
-          <For each={archiveGroups()}>
-            {(group) => <ArchiveGroupCard group={group} onShowAll={() => selectFilter("all")} />}
-          </For>
         </div>
 
         <Show when={visibleGraph().nodes.length === 0}>
@@ -1435,44 +1405,59 @@ export function GraphMode(props: {
           </div>
         </Show>
 
-        <div class="pointer-events-none absolute bottom-4 right-4 hidden w-44 rounded-lg border border-border-weaker-base bg-background-base/95 p-2 shadow-lg backdrop-blur md:block">
+        <div class="absolute bottom-4 right-4 hidden w-44 rounded-lg border border-border-weaker-base bg-background-base/95 p-2 shadow-lg backdrop-blur md:block">
           <div class="mb-1 flex items-center justify-between text-10-semibold uppercase tracking-wide text-text-weak">
             <span>Map</span>
-            <span>{Math.round(viewport().scale * 100)}%</span>
+            <div class="-mr-1 flex items-center gap-1">
+              <span class="tabular-nums">{Math.round(viewport().scale * 100)}%</span>
+              <Tooltip placement="top" value="Fit graph to view">
+                <IconButton
+                  icon="expand"
+                  variant="ghost"
+                  size="small"
+                  onClick={fitGraph}
+                  aria-label="Fit graph to view"
+                />
+              </Tooltip>
+            </div>
           </div>
-          <div class="relative h-24 overflow-hidden rounded bg-surface-raised-base">
-            <For each={visibleGraph().nodes}>
-              {(node) => {
-                const bounds = () => graphBounds()
-                return (
-                  <span
-                    class={`absolute h-1.5 w-2.5 rounded-sm ${COLUMN_ACCENT[node.card.column].dot}`}
-                    style={{
-                      left: `${clamp(((node.x - bounds().minX) / bounds().width) * 100, 1, 97)}%`,
-                      top: `${clamp(((node.y - bounds().minY) / bounds().height) * 100, 1, 97)}%`,
-                    }}
+          <div
+            class="relative h-24 cursor-crosshair overflow-hidden rounded-md bg-surface-raised-base shadow-xs-border-base touch-none"
+            onPointerDown={beginMinimapPointer}
+          >
+            <svg class="absolute inset-0 size-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+              <For each={minimapEdges()}>
+                {(edge) => (
+                  <line
+                    x1={edge.x1}
+                    y1={edge.y1}
+                    x2={edge.x2}
+                    y2={edge.y2}
+                    stroke={edge.critical ? "rgba(255, 123, 114, 0.46)" : "rgba(139, 148, 158, 0.30)"}
+                    stroke-width={edge.critical ? 0.7 : 0.45}
+                    vector-effect="non-scaling-stroke"
                   />
-                )
-              }}
-            </For>
-            <For each={archiveGroups()}>
-              {(group) => {
-                const bounds = () => graphBounds()
-                return (
-                  <span
-                    class="absolute h-1.5 w-3 rounded-sm border border-[#a371f7]/50 bg-[#8957e5]/60"
-                    style={{
-                      left: `${clamp(((group.x - bounds().minX) / bounds().width) * 100, 1, 97)}%`,
-                      top: `${clamp(((group.y - bounds().minY) / bounds().height) * 100, 1, 97)}%`,
-                    }}
+                )}
+              </For>
+              <For each={minimapNodes()}>
+                {(node) => (
+                  <circle
+                    cx={node.x}
+                    cy={node.y}
+                    r={node.selected ? 2.6 : node.column === "closed" ? 1.25 : 1.8}
+                    fill={MINIMAP_STATUS_FILL[node.column]}
+                    fill-opacity={node.column === "closed" ? 0.58 : 0.92}
+                    stroke={node.selected ? "rgba(255, 255, 255, 0.9)" : "rgba(13, 17, 23, 0.72)"}
+                    stroke-width={node.selected ? 0.85 : 0.35}
+                    vector-effect="non-scaling-stroke"
                   />
-                )
-              }}
-            </For>
+                )}
+              </For>
+            </svg>
             <Show when={viewportBounds()}>
               {(bounds) => (
-                <span
-                  class="absolute rounded-sm border border-border-strong-base bg-background-base/30"
+                <div
+                  class="pointer-events-none absolute z-20 rounded border border-[#58a6ff] bg-[#58a6ff]/12 shadow-[0_0_0_999px_rgba(0,0,0,0.16),0_0_0_1px_rgba(255,255,255,0.16)_inset,0_0_12px_rgba(88,166,255,0.30)]"
                   style={{
                     left: `${bounds().left}%`,
                     top: `${bounds().top}%`,

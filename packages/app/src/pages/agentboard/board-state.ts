@@ -28,9 +28,6 @@ export function canMoveCardTo(card: AgentBoardCard, target: AgentBoardColumnID, 
   if ((card.latestRun?.status === "queued" || card.latestRun?.status === "running") && target !== "running") {
     return { ok: false, reason: "Cancel the active OpenCode run before moving this card." }
   }
-  if (target === "needs_review" && !card.latestRun) {
-    return { ok: false, reason: "Needs Review requires an AgentBoard run first." }
-  }
   if (target === "running" && (card.latestRun?.status === "needs_review" || card.latestRun?.status === "failed")) {
     return { ok: false, reason: "Use Request Changes to resume an OpenCode review run." }
   }

@@ -51,17 +51,17 @@ describe("agentboard graph state", () => {
     )
   })
 
-  test("honors saved graph positions", () => {
+  test("ignores saved graph positions in base layout", () => {
     const input = board()
     input.graph.positions = [{ issueID: "AB-2", x: 500, y: 240, pinned: true }]
 
     const graph = buildAgentBoardGraph(input)
 
     expect(graph.nodes.find((node) => node.id === "AB-2")).toMatchObject({
-      x: 500,
-      y: 240,
-      pinned: true,
+      pinned: false,
     })
+    expect(graph.nodes.find((node) => node.id === "AB-2")?.x).not.toBe(500)
+    expect(graph.nodes.find((node) => node.id === "AB-2")?.y).not.toBe(240)
   })
 
   test("increases auto-layout spacing for large graphs", () => {

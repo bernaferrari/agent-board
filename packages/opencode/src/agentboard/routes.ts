@@ -34,13 +34,18 @@ export function AgentBoardRoutes() {
     const beadsStatus = beadsStatusForColumn(column)
     if (beadsStatus) await Beads.updateStatus(Instance.worktree, issueID, beadsStatus)
     if (column === "needs_review") {
-      const run = latest
-      if (!run) throw new Error("Needs Review requires an AgentBoard run.")
+      const run =
+        latest ??
+        AgentBoardStore.createRun({
+          projectID: project.id,
+          issueID,
+          prompt: "Manual review marker created from AgentBoard.",
+        })
       AgentBoardStore.updateRun(run.id, { status: "needs_review", ended: Date.now() })
       AgentBoardStore.addRunEvent({
         runID: run.id,
         type: "needs_review",
-        message: "Moved to Needs Review from the board",
+        message: latest ? "Moved to Needs Review from the board" : "Moved to Needs Review manually from the board",
       })
     }
     if (latest && column === "ready" && (latest.status === "needs_review" || latest.status === "failed")) {

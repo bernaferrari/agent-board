@@ -82,7 +82,7 @@ describe("agentboard board state", () => {
   test("blocks impossible manual moves before optimistic UI", () => {
     expect(canMoveCardTo(readyCard, "blocked").ok).toBe(false)
     expect(canMoveCardTo(readyCard, "ready").ok).toBe(false)
-    expect(canMoveCardTo(readyCard, "needs_review").ok).toBe(false)
+    expect(canMoveCardTo(readyCard, "needs_review").ok).toBe(true)
     expect(canMoveCardTo(completedReadyCard, "needs_review").ok).toBe(true)
     expect(canMoveCardTo(reviewableCard, "closed").ok).toBe(false)
     expect(canMoveCardTo(reviewCard, "running").ok).toBe(false)

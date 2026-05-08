@@ -725,12 +725,6 @@ function BoardCardContent(props: {
     const value = run()
     return !!value && RUNNING.has(value.status)
   }
-  const advanceTarget = () => ADVANCEMENT[props.card.column]
-  const canAdvance = () => {
-    const target = advanceTarget()
-    if (!target) return false
-    return canMoveCardTo(props.card, target).ok
-  }
   return (
     <>
       <Show when={isLive()}>
@@ -746,13 +740,11 @@ function BoardCardContent(props: {
             <span
               class={`shrink-0 rounded-full px-1.5 py-0.5 text-10-semibold ring-1 ring-inset ${statusTone(status())}`}
             >
-              <span class={`mr-1 inline-block size-1.5 rounded-full ${accent().dot}`} />
               {statusLabel(status())}
             </span>
           }
         >
-          <span class="flex shrink-0 items-center gap-1 rounded-full bg-[#9e6a03]/15 px-1.5 py-0.5 text-10-semibold text-[#f2cc60] ring-1 ring-inset ring-[#d29922]/35">
-            <span class="size-1.5 animate-pulse rounded-full bg-[#d29922]" />
+          <span class="flex shrink-0 items-center rounded-full bg-[#9e6a03]/15 px-1.5 py-0.5 text-10-semibold text-[#f2cc60] ring-1 ring-inset ring-[#d29922]/35">
             Running
           </span>
         </Show>
@@ -795,10 +787,10 @@ function BoardCardContent(props: {
         </div>
       </Show>
 
-      <div class="mt-3 flex items-center justify-between gap-2 border-t border-border-weaker-base/50 pt-2">
+      <div class="mt-3 flex min-h-8 items-center justify-between gap-2 border-t border-border-weaker-base/50 pt-2">
         <span class={`max-w-[10rem] truncate ${issueIDTone()}`}>{props.card.issue.id}</span>
         <Show when={!props.preview}>
-          <div class="hidden shrink-0 items-center gap-1 group-hover:flex group-focus-within:flex">
+          <div class="flex h-6 min-w-[3.75rem] shrink-0 items-center justify-end gap-1 opacity-0 transition-opacity duration-150 pointer-events-none group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
             <Show when={props.card.column === "ready" && props.onChat}>
               <button
                 type="button"
@@ -815,25 +807,23 @@ function BoardCardContent(props: {
                 Chat
               </button>
             </Show>
-            <Show when={canAdvance() && props.card.column !== "ready" && props.onAdvance}>
-              <button
-                type="button"
-                class="flex size-6 items-center justify-center rounded bg-surface-raised-base text-text-weak transition-colors hover:bg-surface-raised-base-hover hover:text-text-strong"
-                onPointerDown={(event) => event.stopPropagation()}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  props.onAdvance?.()
-                }}
-                aria-label={`Advance to ${advanceTarget()}`}
-                title={`Advance to ${advanceTarget()?.replaceAll("_", " ")}`}
-              >
-                <Icon name="arrow-right" class="size-3" />
-              </button>
-            </Show>
           </div>
         </Show>
       </div>
     </>
+  )
+}
+
+function BlockedStripeOverlay(props: { subtle?: boolean }) {
+  return (
+    <div
+      class="pointer-events-none absolute inset-0"
+      style={{
+        "background-image": `repeating-linear-gradient(135deg, rgba(248, 81, 73, ${
+          props.subtle ? "0.035" : "0.075"
+        }) 0px, rgba(248, 81, 73, ${props.subtle ? "0.035" : "0.075"}) 1px, transparent 1px, transparent 9px)`,
+      }}
+    />
   )
 }
 
@@ -861,7 +851,7 @@ function BoardCard(props: {
     "ring-1 ring-inset ring-[#d29922]/40": isLive() && !props.selected,
     "!fixed !left-0 !top-0 !h-0 !min-h-0 !w-0 !border-0 !p-0 opacity-0 pointer-events-none shadow-none hover:bg-background-base":
       props.dragging,
-    "hover:bg-surface-raised-base hover:shadow-md": !props.boardDragging,
+    "hover:border-border-base hover:bg-surface-raised-base/80 hover:shadow-xs-border-hover": !props.boardDragging,
     "pointer-events-none": props.boardDragging && !props.dragging,
     "cursor-grab active:cursor-grabbing": draggable(),
     "cursor-default": !draggable(),
@@ -885,7 +875,12 @@ function BoardCard(props: {
         props.onSelect()
       }}
     >
-      <BoardCardContent card={props.card} busy={props.busy} onChat={props.onChat} onAdvance={props.onAdvance} />
+      <Show when={props.card.column === "blocked"}>
+        <BlockedStripeOverlay />
+      </Show>
+      <div class="relative">
+        <BoardCardContent card={props.card} busy={props.busy} onChat={props.onChat} onAdvance={props.onAdvance} />
+      </div>
     </article>
   ) : (
     <article
@@ -904,7 +899,12 @@ function BoardCard(props: {
         props.onSelect()
       }}
     >
-      <BoardCardContent card={props.card} busy={props.busy} onChat={props.onChat} onAdvance={props.onAdvance} />
+      <Show when={props.card.column === "blocked"}>
+        <BlockedStripeOverlay />
+      </Show>
+      <div class="relative">
+        <BoardCardContent card={props.card} busy={props.busy} onChat={props.onChat} onAdvance={props.onAdvance} />
+      </div>
     </article>
   )
 }
@@ -1254,7 +1254,7 @@ function DetailDrawer(props: {
             </For>
           </div>
         </div>
-        <div class="flex flex-wrap gap-2">
+        <div class="flex flex-wrap gap-2 border-t border-border-weaker-base/60 pt-3">
           <Show when={canChat()}>
             <Button variant="primary" size="small" icon="bubble-5" disabled={props.busy} onClick={props.onChat}>
               Chat
@@ -1851,7 +1851,7 @@ function BoardColumn(props: {
         columnDraggable.ref(element)
       }}
       data-agentboard-column={props.column.id}
-      class="flex min-h-0 flex-col rounded-lg bg-surface-raised-base transition-[background,box-shadow,opacity] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)]"
+      class="relative flex min-h-0 flex-col overflow-hidden rounded-lg bg-surface-raised-base transition-[background,box-shadow,opacity] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)]"
       classList={{
         "ring-1 ring-inset ring-border-weaker-base": (dragging() || columnDragActive()) && !targeted(),
         [`${accent().drop} ring-1 ring-inset shadow-lg ${accent().glow}`]:
@@ -1861,6 +1861,9 @@ function BoardColumn(props: {
           columnDragging(),
       }}
     >
+      <Show when={props.column.id === "blocked"}>
+        <BlockedStripeOverlay subtle />
+      </Show>
       <header
         class="sticky top-0 z-10 flex shrink-0 items-center gap-2 rounded-t-lg px-3 py-2.5 transition-colors duration-150"
         classList={{
@@ -1882,7 +1885,7 @@ function BoardColumn(props: {
           {props.column.cards.length}
         </span>
       </header>
-      <div class="min-h-0 flex-1 space-y-2.5 overflow-auto px-2.5 pb-4" data-scrollable>
+      <div class="relative z-10 min-h-0 flex-1 space-y-2.5 overflow-auto px-2.5 pb-4" data-scrollable>
         <Show
           when={props.column.cards.length > 0}
           fallback={
@@ -3130,7 +3133,7 @@ export default function AgentBoardPage() {
                     >
                       <DragDropSensors />
                       <div class="flex h-full flex-col">
-                        <div class="min-h-0 flex-1 overflow-x-auto px-4 pt-4">
+                        <div class="min-h-0 flex-1 overflow-x-auto p-4">
                           <div class="grid h-full min-w-[1200px] grid-cols-5 gap-3">
                             <For each={filteredColumns()}>
                               {(column) => (
@@ -3176,45 +3179,47 @@ export default function AgentBoardPage() {
                           />
                         </div>
                       </div>
-                      <Show when={activeCardDragLayer()}>
-                        {(drag) => (
-                          <CardDragLayer
-                            card={drag().card}
-                            point={drag().point}
-                            offset={drag().offset}
-                            width={drag().width}
-                            height={drag().height}
-                          />
-                        )}
-                      </Show>
-                      <DragOverlay
-                        class="pointer-events-none z-[10000]"
-                        style={{
-                          "z-index": 10000,
-                          "pointer-events": "none",
-                          "min-width": dragPreviewWidth() ? `${dragPreviewWidth()}px` : undefined,
-                          "min-height": dragPlaceholderHeight() ? `${dragPlaceholderHeight()}px` : undefined,
-                        }}
-                      >
-                        {(draggable) => {
-                          const dragID = draggable?.id?.toString()
-                          const columnID = parseColumnDragID(dragID)
-                          const column = columnID
-                            ? (dragSnapshot() ?? board())?.columns.find((item) => item.id === columnID)
-                            : undefined
-                          return (
-                            <Show when={column}>
-                              {(value) => (
-                                <ColumnPreview
-                                  column={value()}
-                                  width={dragPreviewWidth()}
-                                  height={dragPlaceholderHeight()}
-                                />
-                              )}
-                            </Show>
-                          )
-                        }}
-                      </DragOverlay>
+                      <Portal>
+                        <Show when={activeCardDragLayer()}>
+                          {(drag) => (
+                            <CardDragLayer
+                              card={drag().card}
+                              point={drag().point}
+                              offset={drag().offset}
+                              width={drag().width}
+                              height={drag().height}
+                            />
+                          )}
+                        </Show>
+                        <DragOverlay
+                          class="pointer-events-none z-[10000]"
+                          style={{
+                            "z-index": 10000,
+                            "pointer-events": "none",
+                            "min-width": dragPreviewWidth() ? `${dragPreviewWidth()}px` : undefined,
+                            "min-height": dragPlaceholderHeight() ? `${dragPlaceholderHeight()}px` : undefined,
+                          }}
+                        >
+                          {(draggable) => {
+                            const dragID = draggable?.id?.toString()
+                            const columnID = parseColumnDragID(dragID)
+                            const column = columnID
+                              ? (dragSnapshot() ?? board())?.columns.find((item) => item.id === columnID)
+                              : undefined
+                            return (
+                              <Show when={column}>
+                                {(value) => (
+                                  <ColumnPreview
+                                    column={value()}
+                                    width={dragPreviewWidth()}
+                                    height={dragPlaceholderHeight()}
+                                  />
+                                )}
+                              </Show>
+                            )
+                          }}
+                        </DragOverlay>
+                      </Portal>
                     </DragDropProvider>
                   }
                 >

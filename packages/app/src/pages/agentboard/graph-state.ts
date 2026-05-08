@@ -1,4 +1,4 @@
-import type { AgentBoardBoard, AgentBoardCard, AgentBoardDependency, AgentBoardGraphPosition } from "./api"
+import type { AgentBoardBoard, AgentBoardCard, AgentBoardDependency } from "./api"
 import { allCards } from "./board-state"
 
 export type AgentBoardGraphEdge = AgentBoardDependency & {
@@ -43,10 +43,6 @@ function priorityRank(card: AgentBoardCard) {
     if (Number.isFinite(parsed)) return parsed
   }
   return 5
-}
-
-function savedPositions(input?: AgentBoardGraphPosition[]) {
-  return new Map((input ?? []).map((position) => [position.issueID, position]))
 }
 
 function uniqueDependencies(board: AgentBoardBoard, cards: AgentBoardCard[]) {
@@ -110,7 +106,6 @@ export function buildAgentBoardGraph(board: AgentBoardBoard, query = ""): AgentB
       .includes(term)
   })
   const dependencies = uniqueDependencies(board, cards)
-  const saved = savedPositions(board.graph?.positions)
   const depths = computeDepths(cards, dependencies)
   const downstream = downstreamCounts(cards, dependencies)
   const blockedBy = new Map(cards.map((card) => [card.issue.id, 0]))
@@ -165,16 +160,15 @@ export function buildAgentBoardGraph(board: AgentBoardBoard, query = ""): AgentB
   for (const [depth, cardsInDepth] of depthEntries) {
     const yOffset = ((maxRows - cardsInDepth.length) * yGap) / 2
     cardsInDepth.forEach((card, index) => {
-      const position = saved.get(card.issue.id)
       const unblocks = downstream.get(card.issue.id) ?? 0
       const blockers = blockedBy.get(card.issue.id) ?? 0
       nodes.push({
         id: card.issue.id,
         card,
-        x: position?.x ?? padding + depth * xGap,
-        y: position?.y ?? padding + yOffset + index * yGap,
+        x: padding + depth * xGap,
+        y: padding + yOffset + index * yGap,
         depth,
-        pinned: position?.pinned ?? false,
+        pinned: false,
         blockedBy: blockers,
         unblocks,
         critical: unblocks >= 2 || blockers >= 2 || card.column === "blocked",
