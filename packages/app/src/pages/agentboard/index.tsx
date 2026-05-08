@@ -1817,6 +1817,119 @@ function IssueComposer(props: {
   )
 }
 
+function BoardListView(props: {
+  columns: AgentBoardBoard["columns"]
+  dependencies: AgentBoardBoard["graph"]["dependencies"]
+  selectedID?: string
+  busy?: string
+  knownLabels: string[]
+  onSelect: (issueID: string) => void
+  onChat: (issueID: string) => void
+  onSubmit: (input: ComposerSubmit) => Promise<void>
+  onPlan: (input: ComposerDraft) => void
+  onSuggest: () => void
+}) {
+  const rows = () => props.columns.flatMap((column) => column.cards.map((card) => ({ card, column })))
+  const blockerCounts = createMemo(() => {
+    const counts = new Map<string, number>()
+    for (const dependency of props.dependencies) {
+      if (dependency.type !== "blocks") continue
+      counts.set(dependency.fromIssueID, (counts.get(dependency.fromIssueID) ?? 0) + 1)
+    }
+    return counts
+  })
+  return (
+    <div class="flex h-full flex-col">
+      <div class="min-h-0 flex-1 overflow-auto p-4">
+        <div class="mx-auto w-full max-w-6xl overflow-hidden rounded-lg border border-border-weaker-base bg-surface-panel shadow-xs-border-base">
+          <div class="grid grid-cols-[minmax(22rem,1fr)_8rem_5rem_8rem_9rem] border-b border-border-weaker-base bg-surface-raised-base/45 px-3 py-2 text-10-semibold uppercase tracking-wider text-text-muted">
+            <span>Issue</span>
+            <span>Status</span>
+            <span>Priority</span>
+            <span>Dependencies</span>
+            <span>Latest</span>
+          </div>
+          <Show
+            when={rows().length > 0}
+            fallback={<div class="px-4 py-10 text-center text-13-regular text-text-weak">No matching issues.</div>}
+          >
+            <For each={rows()}>
+              {({ card }) => {
+                const accent = () => COLUMN_ACCENT[card.column]
+                const last = () => latestEvent(card)
+                const blockerCount = () => blockerCounts().get(card.issue.id) ?? 0
+                const latest = () =>
+                  last()?.message ?? formatRelative(card.latestRun?.time.updated ?? card.latestRun?.time.ended)
+                return (
+                  <button
+                    type="button"
+                    class="group grid w-full grid-cols-[minmax(22rem,1fr)_8rem_5rem_8rem_9rem] items-center border-b border-border-weaker-base px-3 py-3 text-left transition-colors last:border-b-0 hover:bg-surface-raised-base/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-border-strong-base"
+                    classList={{
+                      "bg-surface-raised-base/80": props.selectedID === card.issue.id,
+                    }}
+                    onClick={() => props.onSelect(card.issue.id)}
+                    onDblClick={() => props.onChat(card.issue.id)}
+                  >
+                    <div class="min-w-0 pr-4">
+                      <div class="flex min-w-0 items-center gap-2">
+                        <span class={issueIDTone()}>{card.issue.id}</span>
+                        <span class="truncate text-13-semibold text-text-strong">{card.issue.title}</span>
+                      </div>
+                      <Show when={cardSummary(card)}>
+                        {(summary) => (
+                          <p class="mt-1 line-clamp-1 text-12-regular text-text-weak">{summary()}</p>
+                        )}
+                      </Show>
+                    </div>
+                    <div class="min-w-0 pr-3">
+                      <span
+                        class={`inline-flex max-w-full items-center rounded-full px-1.5 py-0.5 text-10-semibold ring-1 ring-inset ${statusTone(visibleStatus(card))}`}
+                      >
+                        <span class="truncate">{statusLabel(visibleStatus(card))}</span>
+                      </span>
+                    </div>
+                    <div>
+                      <Show when={card.issue.priority !== undefined} fallback={<span class="text-text-muted">-</span>}>
+                        <span
+                          class={`inline-flex rounded px-1.5 py-0.5 font-mono text-10-semibold ring-1 ring-inset ${priorityTone(card.issue.priority)}`}
+                        >
+                          P{card.issue.priority}
+                        </span>
+                      </Show>
+                    </div>
+                    <div class="flex min-w-0 items-center gap-1.5 pr-3 text-12-regular text-text-weak">
+                      <Icon name={COLUMN_ICON[card.column]} class={`size-3 shrink-0 ${accent().text}`} />
+                      <span class="truncate">
+                        {blockerCount()
+                          ? `${blockerCount()} blocker${blockerCount() === 1 ? "" : "s"}`
+                          : COLUMN_HINT[card.column]}
+                      </span>
+                    </div>
+                    <div class="flex min-w-0 items-center justify-between gap-2 text-12-regular text-text-weak">
+                      <span class="truncate">{latest() || "-"}</span>
+                      <Icon name="bubble-5" class="size-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-70" />
+                    </div>
+                  </button>
+                )
+              }}
+            </For>
+          </Show>
+        </div>
+      </div>
+      <div class="shrink-0 border-t border-border-weaker-base bg-background-base px-4 py-3">
+        <IssueComposer
+          variant="inline"
+          knownLabels={props.knownLabels}
+          busy={!!props.busy}
+          onSubmit={props.onSubmit}
+          onPlan={props.onPlan}
+          onSuggest={props.onSuggest}
+        />
+      </div>
+    </div>
+  )
+}
+
 function BoardColumn(props: {
   column: AgentBoardBoard["columns"][number]
   selectedID?: string
@@ -2969,6 +3082,7 @@ export default function AgentBoardPage() {
         each={
           [
             { id: "board" as const, label: "Board", icon: "checklist" as const },
+            { id: "list" as const, label: "List", icon: "bullet-list" as const },
             { id: "graph" as const, label: "Graph", icon: "branch" as const },
           ] as const
         }
@@ -2988,14 +3102,6 @@ export default function AgentBoardPage() {
           </button>
         )}
       </For>
-      <button
-        type="button"
-        class="inline-flex h-full items-center gap-1.5 px-2 text-10-semibold text-text-weak transition-colors hover:bg-surface-raised-base hover:text-text-base"
-        onClick={() => navigate(`/${base64Encode(sdk.directory)}/session`)}
-      >
-        <Icon name="bubble-5" size="small" class="size-3" />
-        <span>Chat</span>
-      </button>
     </div>
   )
 
@@ -3126,101 +3232,120 @@ export default function AgentBoardPage() {
                 <Show
                   when={viewMode() === "graph"}
                   fallback={
-                    <DragDropProvider
-                      onDragStart={handleDragStart}
-                      onDragMove={handleDragMove}
-                      onDragEnd={handleDragEnd}
-                    >
-                      <DragDropSensors />
-                      <div class="flex h-full flex-col">
-                        <div class="min-h-0 flex-1 overflow-x-auto p-4">
-                          <div class="grid h-full min-w-[1200px] grid-cols-5 gap-3">
-                            <For each={filteredColumns()}>
-                              {(column) => (
-                                <>
-                                  <Show
-                                    when={
-                                      activeColumnDrag() && activeColumnDropPlacement()?.beforeColumnID === column.id
-                                    }
-                                  >
-                                    <ColumnDropPlaceholder height={dragPlaceholderHeight()} />
-                                  </Show>
-                                  <BoardColumn
-                                    column={column}
-                                    selectedID={selectedID()}
-                                    busy={busy()}
-                                    activeDrag={activeDrag()}
-                                    activeDragCard={activeDragCard()}
-                                    activeColumnDrag={activeColumnDrag()}
-                                    activeTarget={activeDropTarget()}
-                                    dropPlacement={activeDropPlacement()}
-                                    placeholderHeight={dragPlaceholderHeight()}
-                                    onSelect={selectCard}
-                                    onChat={openIssueChat}
-                                    onAdvance={handleAdvance}
-                                    onCardDragStart={startCardDrag}
-                                  />
-                                </>
-                              )}
-                            </For>
-                            <Show when={activeColumnDrag() && !activeColumnDropPlacement()?.beforeColumnID}>
-                              <ColumnDropPlaceholder height={dragPlaceholderHeight()} />
-                            </Show>
-                          </div>
-                        </div>
-                        <div class="shrink-0 border-t border-border-weaker-base bg-background-base px-4 py-3">
-                          <IssueComposer
-                            variant="inline"
-                            knownLabels={knownLabels()}
-                            busy={!!busy()}
-                            onSubmit={createIssue}
-                            onPlan={planInChat}
-                            onSuggest={suggestInChat}
-                          />
-                        </div>
-                      </div>
-                      <Portal>
-                        <Show when={activeCardDragLayer()}>
-                          {(drag) => (
-                            <CardDragLayer
-                              card={drag().card}
-                              point={drag().point}
-                              offset={drag().offset}
-                              width={drag().width}
-                              height={drag().height}
-                            />
-                          )}
-                        </Show>
-                        <DragOverlay
-                          class="pointer-events-none z-[10000]"
-                          style={{
-                            "z-index": 10000,
-                            "pointer-events": "none",
-                            "min-width": dragPreviewWidth() ? `${dragPreviewWidth()}px` : undefined,
-                            "min-height": dragPlaceholderHeight() ? `${dragPlaceholderHeight()}px` : undefined,
-                          }}
+                    <Show
+                      when={viewMode() === "list"}
+                      fallback={
+                        <DragDropProvider
+                          onDragStart={handleDragStart}
+                          onDragMove={handleDragMove}
+                          onDragEnd={handleDragEnd}
                         >
-                          {(draggable) => {
-                            const dragID = draggable?.id?.toString()
-                            const columnID = parseColumnDragID(dragID)
-                            const column = columnID
-                              ? (dragSnapshot() ?? board())?.columns.find((item) => item.id === columnID)
-                              : undefined
-                            return (
-                              <Show when={column}>
-                                {(value) => (
-                                  <ColumnPreview
-                                    column={value()}
-                                    width={dragPreviewWidth()}
-                                    height={dragPlaceholderHeight()}
-                                  />
-                                )}
-                              </Show>
-                            )
-                          }}
-                        </DragOverlay>
-                      </Portal>
-                    </DragDropProvider>
+                          <DragDropSensors />
+                          <div class="flex h-full flex-col">
+                            <div class="min-h-0 flex-1 overflow-x-auto p-4">
+                              <div class="grid h-full min-w-[1200px] grid-cols-5 gap-3">
+                                <For each={filteredColumns()}>
+                                  {(column) => (
+                                    <>
+                                      <Show
+                                        when={
+                                          activeColumnDrag() &&
+                                          activeColumnDropPlacement()?.beforeColumnID === column.id
+                                        }
+                                      >
+                                        <ColumnDropPlaceholder height={dragPlaceholderHeight()} />
+                                      </Show>
+                                      <BoardColumn
+                                        column={column}
+                                        selectedID={selectedID()}
+                                        busy={busy()}
+                                        activeDrag={activeDrag()}
+                                        activeDragCard={activeDragCard()}
+                                        activeColumnDrag={activeColumnDrag()}
+                                        activeTarget={activeDropTarget()}
+                                        dropPlacement={activeDropPlacement()}
+                                        placeholderHeight={dragPlaceholderHeight()}
+                                        onSelect={selectCard}
+                                        onChat={openIssueChat}
+                                        onAdvance={handleAdvance}
+                                        onCardDragStart={startCardDrag}
+                                      />
+                                    </>
+                                  )}
+                                </For>
+                                <Show when={activeColumnDrag() && !activeColumnDropPlacement()?.beforeColumnID}>
+                                  <ColumnDropPlaceholder height={dragPlaceholderHeight()} />
+                                </Show>
+                              </div>
+                            </div>
+                            <div class="shrink-0 border-t border-border-weaker-base bg-background-base px-4 py-3">
+                              <IssueComposer
+                                variant="inline"
+                                knownLabels={knownLabels()}
+                                busy={!!busy()}
+                                onSubmit={createIssue}
+                                onPlan={planInChat}
+                                onSuggest={suggestInChat}
+                              />
+                            </div>
+                          </div>
+                          <Portal>
+                            <Show when={activeCardDragLayer()}>
+                              {(drag) => (
+                                <CardDragLayer
+                                  card={drag().card}
+                                  point={drag().point}
+                                  offset={drag().offset}
+                                  width={drag().width}
+                                  height={drag().height}
+                                />
+                              )}
+                            </Show>
+                            <DragOverlay
+                              class="pointer-events-none z-[10000]"
+                              style={{
+                                "z-index": 10000,
+                                "pointer-events": "none",
+                                "min-width": dragPreviewWidth() ? `${dragPreviewWidth()}px` : undefined,
+                                "min-height": dragPlaceholderHeight() ? `${dragPlaceholderHeight()}px` : undefined,
+                              }}
+                            >
+                              {(draggable) => {
+                                const dragID = draggable?.id?.toString()
+                                const columnID = parseColumnDragID(dragID)
+                                const column = columnID
+                                  ? (dragSnapshot() ?? board())?.columns.find((item) => item.id === columnID)
+                                  : undefined
+                                return (
+                                  <Show when={column}>
+                                    {(value) => (
+                                      <ColumnPreview
+                                        column={value()}
+                                        width={dragPreviewWidth()}
+                                        height={dragPlaceholderHeight()}
+                                      />
+                                    )}
+                                  </Show>
+                                )
+                              }}
+                            </DragOverlay>
+                          </Portal>
+                        </DragDropProvider>
+                      }
+                    >
+                      <BoardListView
+                        columns={filteredColumns()}
+                        dependencies={current().graph.dependencies}
+                        selectedID={selectedID()}
+                        busy={busy()}
+                        knownLabels={knownLabels()}
+                        onSelect={selectCard}
+                        onChat={openIssueChat}
+                        onSubmit={createIssue}
+                        onPlan={planInChat}
+                        onSuggest={suggestInChat}
+                      />
+                    </Show>
                   }
                 >
                   <GraphMode

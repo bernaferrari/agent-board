@@ -6,7 +6,7 @@ import type { AgentBoardBoard, AgentBoardCard, AgentBoardColumnID, AgentBoardGra
 import { buildGraphDependencyLayout, getDependencyEdgeNodes } from "./graph-layout"
 import { buildAgentBoardGraph, type AgentBoardGraphNode } from "./graph-state"
 
-export type AgentBoardViewMode = "board" | "graph"
+export type AgentBoardViewMode = "board" | "list" | "graph"
 
 type GraphFilter = "all" | "open" | "critical"
 
