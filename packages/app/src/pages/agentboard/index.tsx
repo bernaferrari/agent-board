@@ -200,22 +200,22 @@ const PRIORITY_OPTIONS = [
   {
     value: 0,
     label: "P0",
-    tone: "bg-[#da3633]/14 text-text-strong ring-[#f85149]/45",
+    tone: "bg-[#da3633]/14 text-[color-mix(in_oklch,#cf222e_62%,var(--text-strong))] ring-[#f85149]/45",
   },
   {
     value: 1,
     label: "P1",
-    tone: "bg-[#bc4c00]/14 text-text-strong ring-[#f0883e]/45",
+    tone: "bg-[#bc4c00]/14 text-[color-mix(in_oklch,#bc4c00_62%,var(--text-strong))] ring-[#f0883e]/45",
   },
   {
     value: 2,
     label: "P2",
-    tone: "bg-[#9e6a03]/14 text-text-strong ring-[#d29922]/45",
+    tone: "bg-[#9e6a03]/14 text-[color-mix(in_oklch,#9a6700_62%,var(--text-strong))] ring-[#d29922]/45",
   },
   {
     value: 3,
     label: "P3",
-    tone: "bg-surface-raised-base text-text-weak ring-border-weaker-base",
+    tone: "bg-[#656d76]/12 text-[color-mix(in_oklch,#57606a_62%,var(--text-strong))] ring-[#8c959f]/40",
   },
 ] as const
 
@@ -476,6 +476,14 @@ const COLUMN_EMPTY: Record<AgentBoardColumnID, { idle: string; managed?: string 
 function formatTime(value?: number) {
   if (!value) return ""
   return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(value)
+}
+
+function formatAbsolute(value?: number) {
+  if (!value) return ""
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(value)
 }
 
 function formatRelative(value?: number) {
@@ -1067,12 +1075,21 @@ function DragPreview(props: { card: AgentBoardCard; width?: number; height?: num
   )
 }
 
-function ColumnPreview(props: { column: AgentBoardBoard["columns"][number]; width?: number; height?: number }) {
+function ColumnPreview(props: {
+  column: AgentBoardBoard["columns"][number]
+  width?: number
+  height?: number
+  ghost?: boolean
+}) {
   if (!props.width) return null
   const accent = () => COLUMN_ACCENT[props.column.id]
   return (
     <div
-      class="pointer-events-none box-border flex min-h-0 flex-none flex-col overflow-hidden rounded-lg border border-border-strong-base bg-surface-raised-base text-left opacity-95 shadow-2xl"
+      class="pointer-events-none box-border flex min-h-0 flex-none flex-col overflow-hidden rounded-lg border border-border-strong-base bg-surface-raised-base text-left shadow-2xl"
+      classList={{
+        "opacity-40": props.ghost,
+        "opacity-90": !props.ghost,
+      }}
       style={{
         width: `${props.width}px`,
         height: props.height ? `${props.height}px` : undefined,
@@ -1123,8 +1140,53 @@ function CardDragLayer(props: {
 
 type DrawerTab = "details" | "timeline" | "artifacts" | "raw"
 
+function DependencyMiniCard(props: {
+  issueID: string
+  card?: AgentBoardCard
+  onSelect: () => void
+}) {
+  const status = () => (props.card ? visibleStatus(props.card) : undefined)
+  return (
+    <button
+      type="button"
+      class="group flex w-full items-start rounded-md border border-border-weaker-base bg-background-base px-2.5 py-2 text-left transition-[border-color,background,box-shadow] hover:border-border-base hover:bg-surface-raised-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-strong-base disabled:cursor-default disabled:opacity-70 disabled:hover:border-border-weaker-base disabled:hover:bg-background-base"
+      disabled={!props.card}
+      onClick={props.onSelect}
+    >
+      <span class="min-w-0 flex-1">
+        <span class="flex min-w-0 items-center gap-1.5">
+          <span class={issueIDTone()}>{props.issueID}</span>
+          <Show when={props.card?.issue.priority !== undefined}>
+            <span class={`rounded px-1 py-0.5 font-mono text-10-semibold ring-1 ring-inset ${priorityTone(props.card!.issue.priority)}`}>
+              P{props.card!.issue.priority}
+            </span>
+          </Show>
+          <Show when={status()}>
+            {(value) => (
+              <span class={`rounded px-1.5 py-0.5 text-10-semibold uppercase tracking-wide ring-1 ring-inset ${statusTone(value())}`}>
+                {statusLabel(value())}
+              </span>
+            )}
+          </Show>
+        </span>
+        <span class="mt-1 block truncate text-12-semibold text-text-strong">
+          {props.card?.issue.title ?? "Issue not loaded in this board view"}
+        </span>
+        <Show when={props.card && cardSummary(props.card)}>
+          {(summary) => <span class="mt-0.5 block truncate text-11-regular text-text-weak">{summary()}</span>}
+        </Show>
+      </span>
+      <Show when={props.card}>
+        <Icon name="chevron-right" class="mt-1 size-3.5 text-text-muted transition-colors group-hover:text-text-base" />
+      </Show>
+    </button>
+  )
+}
+
 function DetailDrawer(props: {
   card: AgentBoardCard
+  cards: AgentBoardCard[]
+  dependencies: AgentBoardDependency[]
   busy: boolean
   open: boolean
   tab: DrawerTab
@@ -1137,9 +1199,21 @@ function DetailDrawer(props: {
   onRequestChanges: (message: string) => void
   onRefreshArtifacts: () => void
   onOpenSession: () => void
+  onSelectCard: (issueID: string) => void
 }) {
   const [message, setMessage] = createSignal("")
   const run = () => props.card.latestRun
+  const cardByID = createMemo(() => new Map(props.cards.map((card) => [card.issue.id, card] as const)))
+  const blockers = createMemo(() =>
+    props.dependencies
+      .filter((dependency) => dependency.type === "blocks" && dependency.fromIssueID === props.card.issue.id)
+      .map((dependency) => ({
+        id: dependency.toIssueID,
+        card: cardByID().get(dependency.toIssueID),
+      })),
+  )
+  const createdAt = () => issueCreatedTimestamp(props.card.issue)
+  const updatedAt = () => issueUpdatedTimestamp(props.card)
   const canOpen = () => !!run()?.opencodeSessionID
   const canChat = () => props.card.column !== "closed"
   const canCancel = () => !!run() && RUNNING.has(run()!.status)
@@ -1266,7 +1340,56 @@ function DetailDrawer(props: {
               <p class="mt-2 whitespace-pre-wrap text-13-regular leading-relaxed text-text-base">
                 {props.card.issue.description || "No description provided."}
               </p>
+              <Show when={createdAt() || updatedAt()}>
+                <div class="mt-3 flex flex-wrap items-center gap-2 text-11-regular text-text-weak">
+                  <Show when={createdAt()}>
+                    {(value) => (
+                      <span
+                        class="inline-flex items-center gap-1 rounded bg-surface-raised-base px-1.5 py-0.5 ring-1 ring-inset ring-border-weaker-base"
+                        title={`Created ${formatAbsolute(value())}`}
+                      >
+                        <span class="text-text-muted">Created</span>
+                        <span class="text-text-base">{formatRelative(value()) || formatAbsolute(value())}</span>
+                      </span>
+                    )}
+                  </Show>
+                  <Show when={updatedAt()}>
+                    {(value) => (
+                      <span
+                        class="inline-flex items-center gap-1 rounded bg-surface-raised-base px-1.5 py-0.5 ring-1 ring-inset ring-border-weaker-base"
+                        title={`Updated ${formatAbsolute(value())}`}
+                      >
+                        <span class="text-text-muted">Updated</span>
+                        <span class="text-text-base">{formatRelative(value()) || formatAbsolute(value())}</span>
+                      </span>
+                    )}
+                  </Show>
+                </div>
+              </Show>
             </section>
+            <Show when={blockers().length > 0}>
+              <section class="rounded-md bg-surface-raised-base p-3">
+                <div class="flex items-center justify-between gap-3">
+                  <h3 class="text-10-semibold uppercase tracking-wider text-text-weak">Blocked by</h3>
+                  <span class="rounded bg-background-base px-1.5 py-0.5 text-10-semibold tabular-nums text-text-base ring-1 ring-inset ring-border-weaker-base">
+                    {blockers().length}
+                  </span>
+                </div>
+                <div class="mt-2 space-y-1.5">
+                  <For each={blockers()}>
+                    {(blocker) => (
+                      <DependencyMiniCard
+                        issueID={blocker.id}
+                        card={blocker.card}
+                        onSelect={() => {
+                          if (blocker.card) props.onSelectCard(blocker.id)
+                        }}
+                      />
+                    )}
+                  </For>
+                </div>
+              </section>
+            </Show>
             <Show when={run()}>
               {(current) => (
                 <section class="rounded-md bg-surface-raised-base p-3">
@@ -1615,7 +1738,15 @@ function DropPlaceholder(props: { card?: AgentBoardCard; height?: number }) {
   )
 }
 
-function ColumnDropPlaceholder(props: { height?: number }) {
+function ColumnDropPlaceholder(props: {
+  column?: AgentBoardBoard["columns"][number]
+  width?: number
+  height?: number
+}) {
+  if (props.column && props.width) {
+    return <ColumnPreview column={props.column} width={props.width} height={props.height} ghost />
+  }
+
   return (
     <div
       class="box-border h-full min-h-0 w-full rounded-lg border border-border-weaker-base bg-surface-raised-base opacity-45 shadow-xs-border-base"
@@ -1780,10 +1911,10 @@ function IssueComposer(props: {
       onKeyDown={handleEscape}
     >
       <div
-        class="group relative overflow-hidden rounded-xl bg-background-base shadow-md transition-[box-shadow,background] duration-150"
+        class="group relative overflow-hidden rounded-xl bg-background-base transition-[box-shadow,background] duration-150"
         classList={{
           "ring-1 ring-inset ring-border-weak-base": !filled() && !expanded(),
-          "ring-1 ring-inset ring-border-strong-base shadow-lg": filled() || expanded(),
+          "ring-1 ring-inset ring-border-strong-base": filled() || expanded(),
         }}
       >
         <div class="flex items-start gap-2 px-3 py-2.5">
@@ -1834,27 +1965,6 @@ function IssueComposer(props: {
               >
                 <Icon name="brain" class="size-3" />
                 Suggest
-              </button>
-            </Show>
-            <Show when={filled()}>
-              <button
-                type="button"
-                class="inline-flex h-6 items-center gap-1 rounded-md bg-primary px-2 text-11-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
-                disabled={submitting() || props.busy}
-                onClick={() => void submit(false)}
-                title="Create one Beads issue"
-              >
-                Create issue
-              </button>
-              <button
-                type="button"
-                class="inline-flex h-6 items-center gap-1 rounded-md bg-surface-raised-base px-2 text-11-semibold text-text-base transition-colors hover:bg-surface-raised-base-hover hover:text-text-strong disabled:opacity-50"
-                disabled={submitting() || props.busy}
-                onClick={() => void submit(true)}
-                title="Create one Beads issue, then open chat with that issue context"
-              >
-                <Icon name="bubble-5" class="size-3" />
-                Create & chat
               </button>
             </Show>
           </div>
@@ -1930,13 +2040,7 @@ function IssueComposer(props: {
                 </Show>
               </div>
               <span class="ml-auto hidden items-center gap-1.5 text-10-regular text-text-weak md:flex">
-                <kbd class="rounded bg-surface-raised-base px-1 py-0.5 font-mono">⏎</kbd>
-                create
-                <span class="opacity-50">·</span>
-                <kbd class="rounded bg-surface-raised-base px-1 py-0.5 font-mono">⌘⏎</kbd>
-                create &amp; chat
                 <Show when={!isHero()}>
-                  <span class="opacity-50">·</span>
                   <button
                     type="button"
                     class="inline-flex items-center gap-1 rounded px-1 py-0.5 text-text-weak underline-offset-2 hover:bg-surface-raised-base hover:text-text-strong hover:underline"
@@ -1946,6 +2050,33 @@ function IssueComposer(props: {
                     collapse
                   </button>
                 </Show>
+                <span class="inline-flex items-center gap-1">
+                  <button
+                    type="button"
+                    class="inline-flex items-center gap-1.5 rounded-md bg-surface-raised-base px-2 py-0.5 text-10-semibold text-text-base transition-colors hover:bg-surface-raised-base-hover hover:text-text-strong disabled:opacity-50"
+                    disabled={!filled() || submitting() || props.busy}
+                    onClick={() => void submit(true)}
+                    title="Create one Beads issue, then open chat with that issue context"
+                    aria-label="Create and open chat"
+                  >
+                    <Icon name="bubble-5" class="size-3" />
+                    Chat
+                    <kbd class="rounded bg-background-base px-1 py-0.5 font-mono text-10-semibold text-text-weak ring-1 ring-inset ring-border-weaker-base">
+                      ⌘↵
+                    </kbd>
+                  </button>
+                  <button
+                    type="submit"
+                    class="inline-flex items-center gap-1.5 rounded-md border border-border-weak-base bg-[var(--button-primary-base)] px-2.5 py-0.5 text-10-semibold text-[var(--icon-invert-base)] transition-colors hover:bg-[var(--icon-strong-hover)] disabled:bg-[var(--icon-strong-disabled)] disabled:opacity-100"
+                    disabled={!filled() || submitting() || props.busy}
+                    title="Create one Beads issue"
+                  >
+                    Create
+                    <kbd class="rounded bg-[color-mix(in_srgb,var(--icon-invert-base)_15%,transparent)] px-1 py-0.5 font-mono text-10-semibold text-[color-mix(in_srgb,var(--icon-invert-base)_85%,transparent)]">
+                      ↵
+                    </kbd>
+                  </button>
+                </span>
               </span>
             </div>
           </div>
@@ -1996,7 +2127,7 @@ function BoardListView(props: {
                   return (
                     <section>
                       <header class="sticky top-0 z-10 -mx-1 flex items-center gap-2 bg-background-base/85 px-1 pb-2 pt-1 backdrop-blur">
-                        <span class="inline-flex size-5 items-center justify-center rounded-md bg-surface-raised-base shadow-xs-border-base">
+                        <span class="inline-flex size-5 items-center justify-center rounded-md bg-surface-raised-base ring-1 ring-inset ring-border-weaker-base">
                           <Icon name={COLUMN_ICON[column.id]} class={`size-3 ${accent.text}`} />
                         </span>
                         <h2 class="text-12-semibold uppercase tracking-wider text-text-strong">{column.title}</h2>
@@ -2009,7 +2140,7 @@ function BoardListView(props: {
                           {COLUMN_HINT[column.id]}
                         </span>
                       </header>
-                      <ul class="overflow-hidden rounded-lg border border-border-weaker-base bg-surface-panel shadow-xs-border-base">
+                      <ul class="overflow-hidden rounded-lg border border-border-weaker-base bg-surface-panel">
                         <For each={column.cards}>
                           {(card) => (
                             <BoardListRow
@@ -2203,10 +2334,9 @@ function BoardColumn(props: {
       data-agentboard-column={props.column.id}
       class="relative flex min-h-0 flex-col overflow-hidden rounded-lg bg-surface-raised-base transition-[background,box-shadow,opacity] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)]"
       classList={{
-        "ring-1 ring-inset ring-border-weaker-base": (dragging() || columnDragActive()) && !targeted(),
-        [`${accent().drop} ring-1 ring-inset shadow-lg ${accent().glow}`]:
-          targeted() && (!disabled() || columnDragActive()),
-        "opacity-55 ring-1 ring-inset ring-border-critical-base": targeted() && disabled() && !columnDragActive(),
+        "ring-1 ring-inset ring-border-weaker-base": dragging() && !targeted(),
+        [`${accent().drop} ring-1 ring-inset shadow-lg ${accent().glow}`]: dragging() && targeted() && !disabled(),
+        "opacity-55 ring-1 ring-inset ring-border-critical-base": dragging() && targeted() && disabled(),
         "!fixed !left-0 !top-0 !h-0 !min-h-0 !w-0 !border-0 opacity-0 pointer-events-none shadow-none overflow-hidden":
           columnDragging(),
       }}
@@ -2217,7 +2347,7 @@ function BoardColumn(props: {
       <header
         class="sticky top-0 z-10 flex shrink-0 items-center gap-2 px-3 py-2 transition-colors duration-150"
         classList={{
-          [accent().drop]: targeted() && (!disabled() || columnDragActive()),
+          [accent().drop]: dragging() && targeted() && !disabled(),
           "cursor-grab active:cursor-grabbing": !props.activeDrag,
         }}
         onPointerDown={(event) => {
@@ -2434,6 +2564,11 @@ function SearchField(props: {
   )
 }
 
+function isInitErrorMissingCli(message?: string) {
+  if (!message) return false
+  return /not found|enoent|no such file|command not found|\bspawn\b|not recognized|is not in your PATH/i.test(message)
+}
+
 function SetupState(props: {
   error?: string
   initError?: string
@@ -2443,74 +2578,114 @@ function SetupState(props: {
   onDocs: () => void
 }) {
   const missing = () => isMissingBeads(props.error)
-  const message = () => props.initError ?? shortError(props.error)
+  const cliMissing = () => isInitErrorMissingCli(props.initError)
+
   return (
-    <div class="flex h-full items-center justify-center px-6 pb-32">
-      <div class="-mt-4 w-full max-w-2xl rounded-xl border border-border-weaker-base bg-surface-panel p-6 shadow-xs-border-base">
-        <div class="flex items-start gap-4">
-          <div class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-surface-raised-base text-text-strong shadow-xs-border-base">
-            <Icon name={missing() ? "checklist" : "warning"} class="size-5" />
-          </div>
-          <div class="min-w-0 flex-1">
-            <h2 class="text-18-semibold text-text-strong">
-              {missing() ? "Set up Beads for this project" : "AgentBoard could not load"}
-            </h2>
-            <p class="mt-2 text-13-regular leading-relaxed text-text-base">
-              <Show
-                when={missing()}
-                fallback={message()}
-              >
-                AgentBoard stores its tickets in Beads, a local issue tracker designed for coding agents. This project
-                needs a Beads database before the board can show work.
-              </Show>
-            </p>
-          </div>
-        </div>
-
-        <Show when={missing()}>
-          <div class="mt-5 grid gap-2 text-12-regular text-text-base md:grid-cols-3">
-            <div class="rounded-lg bg-background-base p-3 ring-1 ring-inset ring-border-weaker-base">
-              <div class="text-11-semibold uppercase tracking-wider text-text-weak">1. Install</div>
-              <p class="mt-1 leading-relaxed">Install the Beads CLI, or open the docs if it is not available yet.</p>
-            </div>
-            <div class="rounded-lg bg-background-base p-3 ring-1 ring-inset ring-border-weaker-base">
-              <div class="text-11-semibold uppercase tracking-wider text-text-weak">2. Initialize</div>
-              <p class="mt-1 leading-relaxed">
-                Run <code class="rounded bg-surface-raised-base px-1 font-mono">bd init</code> in this project.
-              </p>
-            </div>
-            <div class="rounded-lg bg-background-base p-3 ring-1 ring-inset ring-border-weaker-base">
-              <div class="text-11-semibold uppercase tracking-wider text-text-weak">3. Use the skill</div>
-              <p class="mt-1 leading-relaxed">
-                In Codex, you can ask Chat to help install or use the Beads skill. Try{" "}
-                <code class="rounded bg-surface-raised-base px-1 font-mono">npx skills beads</code>.
-              </p>
+    <div class="flex h-full items-center justify-center px-6 pb-24">
+      <Show
+        when={missing()}
+        fallback={
+          <div class="-mt-4 w-full max-w-xl rounded-xl border border-border-weaker-base bg-surface-panel p-6 shadow-xs-border-base">
+            <div class="flex items-start gap-4">
+              <div class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-surface-raised-base text-text-strong shadow-xs-border-base">
+                <Icon name="warning" class="size-5" />
+              </div>
+              <div class="min-w-0 flex-1">
+                <h2 class="text-18-semibold text-text-strong">AgentBoard could not load</h2>
+                <p class="mt-2 text-13-regular leading-relaxed text-text-base">{shortError(props.error)}</p>
+                <div class="mt-4 flex flex-wrap items-center gap-2">
+                  <Button variant="ghost" size="large" icon="bubble-5" onClick={props.onChat}>
+                    Ask chat to help
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
-        </Show>
+        }
+      >
+        <div class="w-full max-w-md text-center">
+          <div class="mx-auto mb-4 flex size-12 items-center justify-center rounded-xl bg-surface-raised-base text-text-strong shadow-md">
+            <Icon name="checklist" class="size-5" />
+          </div>
+          <h2 class="text-20-medium text-text-strong [text-wrap:balance]">Beads isn't set up here yet</h2>
+          <p class="mx-auto mt-2 text-13-regular leading-relaxed text-text-weak">
+            AgentBoard runs on{" "}
+            <a
+              class="text-text-base underline underline-offset-2 decoration-text-weak hover:text-text-strong hover:decoration-text-strong"
+              href={BEADS_DOCS_URL}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Beads
+            </a>
+            , a tiny local issue tracker for coding agents.
+          </p>
 
-        <Show when={props.initError}>
-          {(error) => (
-            <div class="mt-4 rounded-lg bg-[#da3633]/14 p-3 text-12-regular leading-relaxed text-text-strong ring-1 ring-inset ring-[#f85149]/45">
-              {error()}
-            </div>
-          )}
-        </Show>
-
-        <div class="mt-5 flex flex-wrap items-center gap-2">
-          <Show when={missing()}>
-            <Button size="large" icon="plus-small" disabled={props.initializing} onClick={props.onInit}>
-              {props.initializing ? "Initializing…" : "Run bd init"}
-            </Button>
+          <Show when={props.initError}>
+            {(error) => (
+              <div class="mt-5 rounded-lg bg-[#da3633]/14 p-3 text-left text-12-regular leading-relaxed text-text-strong ring-1 ring-inset ring-[#f85149]/45">
+                <Show when={cliMissing()} fallback={error()}>
+                  Couldn't run <code class="rounded bg-surface-raised-base px-1 font-mono">bd</code>. Install Beads
+                  first, then try again.
+                </Show>
+              </div>
+            )}
           </Show>
-          <Button variant={missing() ? "secondary" : "ghost"} size="large" icon="bubble-5" onClick={props.onChat}>
-            Ask Chat to help
-          </Button>
-          <Button variant="ghost" size="large" icon="square-arrow-top-right" onClick={props.onDocs}>
-            Beads on GitHub
-          </Button>
+
+          <div class="mt-6 flex justify-center">
+            <Button size="large" icon="plus-small" disabled={props.initializing} onClick={props.onInit}>
+              <Show when={props.initializing} fallback={<>Initialize Beads</>}>
+                Initializing…
+              </Show>
+            </Button>
+          </div>
+
+          <p class="mt-6 text-12-regular leading-relaxed text-text-weak">
+            No <code class="rounded bg-surface-raised-base px-1 font-mono">bd</code> yet?{" "}
+            <button
+              type="button"
+              class="cursor-pointer text-text-base underline underline-offset-2 decoration-text-weak hover:text-text-strong hover:decoration-text-strong"
+              onClick={props.onDocs}
+            >
+              Install from GitHub
+            </button>{" "}
+            or{" "}
+            <button
+              type="button"
+              class="cursor-pointer text-text-base underline underline-offset-2 decoration-text-weak hover:text-text-strong hover:decoration-text-strong"
+              onClick={props.onChat}
+            >
+              ask chat to do it
+            </button>
+            .
+          </p>
+
+          <p class="mt-3 text-11-regular text-text-weak">
+            Tip:{" "}
+            <button
+              type="button"
+              title="Click to copy"
+              class="cursor-pointer rounded bg-surface-raised-base px-1 font-mono transition-colors hover:bg-surface-raised-base-hover hover:text-text-strong"
+              onClick={() => {
+                void navigator.clipboard
+                  ?.writeText("npx skills beads")
+                  .then(() =>
+                    showToast({
+                      variant: "success",
+                      icon: "circle-check",
+                      title: "Copied",
+                      description: "npx skills beads",
+                    }),
+                  )
+                  .catch(() => {})
+              }}
+            >
+              npx skills beads
+            </button>{" "}
+            teaches any model to use Beads.
+          </p>
         </div>
-      </div>
+      </Show>
     </div>
   )
 }
@@ -2553,6 +2728,32 @@ function issueTimestamp(issue: BeadsIssue, keys: string[]) {
     const value = timestampValue(issue.raw[key])
     if (value !== undefined) return value
   }
+}
+
+function issueCreatedTimestamp(issue: BeadsIssue) {
+  return issueTimestamp(issue, [
+    "created_at",
+    "createdAt",
+    "created",
+    "opened_at",
+    "openedAt",
+  ])
+}
+
+function issueUpdatedTimestamp(card: AgentBoardCard) {
+  return (
+    issueTimestamp(card.issue, [
+      "updated_at",
+      "updatedAt",
+      "updated",
+      "modified_at",
+      "modifiedAt",
+      "last_modified",
+      "lastModified",
+    ]) ??
+    card.latestRun?.time.updated ??
+    card.latestRun?.time.ended
+  )
 }
 
 function closedSortTimestamp(card: AgentBoardCard) {
@@ -2652,16 +2853,16 @@ function agentBoardIssueChatPrompt(input: { issue: BeadsIssue; column?: AgentBoa
 
 function agentBoardSetupPrompt() {
   return [
-    "Help me set up Beads for this project so AgentBoard can work.",
+    `Help me install Beads (${BEADS_DOCS_URL}) and set it up for this project so AgentBoard can work.`,
     "",
     "Please:",
     "1. Check whether the `bd` CLI is installed and available on PATH.",
-    "2. If it is not installed, explain the safest install option for this machine and ask before making system changes.",
-    "3. If it is installed, initialize Beads in this project with `bd init`.",
-    "4. Run a quick Beads command such as `bd list --json --tree=false` or `bd doctor` to verify it works.",
+    `2. If it is not installed, install it from ${BEADS_DOCS_URL} using the README's recommended method for this OS. Ask before making system changes.`,
+    "3. Once `bd` is available, run `bd init` in this project.",
+    "4. Verify with `bd list --json --tree=false` or `bd doctor`.",
     "5. End with what changed and what I should do next in AgentBoard.",
     "",
-    "If the Codex Beads skill is needed, use or install it. The user mentioned `npx skills beads` as a possible path.",
+    "Tip: `npx skills beads` teaches any model to use Beads — install it only if I ask.",
   ].join("\n")
 }
 
@@ -3399,9 +3600,7 @@ export default function AgentBoardPage() {
   function handleDragMove(event: DragEvent) {
     const columnID = activeColumnDrag()
     if (columnID) {
-      const point = dragPoint()
-      const target = point ? columnIDAtPoint(point) : undefined
-      setActiveDropTarget(target)
+      setActiveDropTarget(undefined)
       setActiveColumnDropPlacement({ beforeColumnID: beforeColumnIDAtPoint(columnID) })
       return
     }
@@ -3478,7 +3677,7 @@ export default function AgentBoardPage() {
   })
 
   const modeSwitch = () => (
-    <div class="hidden h-6 items-center overflow-hidden rounded-md border border-border-weak-base bg-surface-panel shadow-xs-border-base md:flex">
+    <div class="hidden h-6 items-center overflow-hidden rounded-md border border-border-weak-base bg-surface-panel md:flex">
       <For
         each={
           [
@@ -3693,7 +3892,11 @@ export default function AgentBoardPage() {
                                           activeColumnDropPlacement()?.beforeColumnID === column.id
                                         }
                                       >
-                                        <ColumnDropPlaceholder height={dragPlaceholderHeight()} />
+                                        <ColumnDropPlaceholder
+                                          column={activeColumnPreview()}
+                                          width={dragPreviewWidth()}
+                                          height={dragPlaceholderHeight()}
+                                        />
                                       </Show>
                                       <BoardColumn
                                         column={column}
@@ -3714,7 +3917,11 @@ export default function AgentBoardPage() {
                                   )}
                                 </For>
                                 <Show when={activeColumnDrag() && !activeColumnDropPlacement()?.beforeColumnID}>
-                                  <ColumnDropPlaceholder height={dragPlaceholderHeight()} />
+                                  <ColumnDropPlaceholder
+                                    column={activeColumnPreview()}
+                                    width={dragPreviewWidth()}
+                                    height={dragPlaceholderHeight()}
+                                  />
                                 </Show>
                               </div>
                             </div>
@@ -3825,6 +4032,8 @@ export default function AgentBoardPage() {
           >
             <DetailDrawer
               card={card()}
+              cards={allCards()}
+              dependencies={board()?.graph.dependencies ?? []}
               busy={!!busy()}
               open={drawerOpen()}
               tab={drawerTab()}
@@ -3861,6 +4070,7 @@ export default function AgentBoardPage() {
                 const sessionID = card().latestRun?.opencodeSessionID
                 if (sessionID) navigate(`/${base64Encode(sdk.directory)}/session/${sessionID}`)
               }}
+              onSelectCard={selectCard}
             />
           </div>
         )}

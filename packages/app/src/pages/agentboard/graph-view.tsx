@@ -21,6 +21,8 @@ const GRAPH_EDGE_NODE_PADDING = 30
 const GRAPH_EDGE_APPROACH_CLEARANCE = 52
 const GRAPH_EDGE_LANE_STEP = 104
 const GRAPH_EDGE_LANE_ATTEMPTS = 10
+const GRAPH_EDGE_TERMINAL_GAP = 22
+const GRAPH_EDGE_OUTSIDE_GAP = 72
 const GRAPH_POINTER_OPTIONS: AddEventListenerOptions = { capture: true }
 const GRAPH_EASE = "cubic-bezier(0.22,1,0.36,1)"
 const MINIMAP_STATUS_FILL: Record<AgentBoardColumnID, string> = {
@@ -48,21 +50,26 @@ type GraphEdgeShape = {
   arrow: string
 }
 
+type GraphArrow = {
+  path: string
+  base: GraphPoint
+}
+
 const COLUMN_ACCENT: Record<AgentBoardColumnID, { dot: string; tint: string; ring: string }> = {
-  blocked: { dot: "bg-[#f85149]", tint: "bg-[#da3633]/14 text-text-strong", ring: "ring-[#f85149]/45" },
-  ready: { dot: "bg-[#3fb950]", tint: "bg-[#238636]/14 text-text-strong", ring: "ring-[#3fb950]/45" },
-  running: { dot: "bg-[#d29922]", tint: "bg-[#9e6a03]/14 text-text-strong", ring: "ring-[#d29922]/45" },
-  needs_review: { dot: "bg-[#58a6ff]", tint: "bg-[#58a6ff]/14 text-text-strong", ring: "ring-[#58a6ff]/45" },
-  closed: { dot: "bg-[#8957e5]", tint: "bg-[#8957e5]/14 text-text-strong", ring: "ring-[#a371f7]/45" },
+  blocked: { dot: "bg-[#f85149]", tint: "bg-[#da3633]/14 text-[color-mix(in_oklch,#cf222e_62%,var(--text-strong))]", ring: "ring-[#f85149]/45" },
+  ready: { dot: "bg-[#3fb950]", tint: "bg-[#238636]/14 text-[color-mix(in_oklch,#1a7f37_62%,var(--text-strong))]", ring: "ring-[#3fb950]/45" },
+  running: { dot: "bg-[#d29922]", tint: "bg-[#9e6a03]/14 text-[color-mix(in_oklch,#9a6700_62%,var(--text-strong))]", ring: "ring-[#d29922]/45" },
+  needs_review: { dot: "bg-[#58a6ff]", tint: "bg-[#58a6ff]/14 text-[color-mix(in_oklch,#0969da_62%,var(--text-strong))]", ring: "ring-[#58a6ff]/45" },
+  closed: { dot: "bg-[#8957e5]", tint: "bg-[#8957e5]/14 text-[color-mix(in_oklch,#8250df_62%,var(--text-strong))]", ring: "ring-[#a371f7]/45" },
 }
 
 function priorityTone(priority?: number | string) {
   const value = typeof priority === "number" ? priority : Number(priority)
-  if (value === 0) return "bg-[#da3633]/14 text-text-strong ring-[#f85149]/45"
-  if (value === 1) return "bg-[#9e6a03]/14 text-text-strong ring-[#d29922]/45"
-  if (value === 2) return "bg-surface-raised-base text-text-base ring-border-strong-base"
-  if (value === 3) return "bg-surface-raised-base text-text-weak ring-border-weaker-base"
-  if (value === 4) return "bg-surface-raised-base text-text-weak ring-border-weaker-base"
+  if (value === 0) return "bg-[#da3633]/14 text-[color-mix(in_oklch,#cf222e_62%,var(--text-strong))] ring-[#f85149]/45"
+  if (value === 1) return "bg-[#bc4c00]/14 text-[color-mix(in_oklch,#bc4c00_62%,var(--text-strong))] ring-[#f0883e]/45"
+  if (value === 2) return "bg-[#9e6a03]/14 text-[color-mix(in_oklch,#9a6700_62%,var(--text-strong))] ring-[#d29922]/45"
+  if (value === 3) return "bg-[#656d76]/12 text-[color-mix(in_oklch,#57606a_62%,var(--text-strong))] ring-[#8c959f]/40"
+  if (value === 4) return "bg-[#656d76]/12 text-[color-mix(in_oklch,#57606a_62%,var(--text-strong))] ring-[#8c959f]/40"
   return "bg-surface-raised-base text-text-weak ring-border-weaker-base"
 }
 
@@ -246,27 +253,31 @@ function roundedPolylinePath(points: GraphPoint[], radius = 28) {
   return output.join(" ")
 }
 
-function arrowPath(tip: GraphPoint, angle: number, active: boolean) {
-  const arrowLength = active ? 18 : 16
-  const arrowWidth = active ? 9 : 8
+function graphArrow(tip: GraphPoint, angle: number, active: boolean): GraphArrow {
+  void active
+  const arrowLength = 17
+  const arrowWidth = 8.5
   const baseX = tip.x - Math.cos(angle) * arrowLength
   const baseY = tip.y - Math.sin(angle) * arrowLength
   const normalX = Math.cos(angle + Math.PI / 2)
   const normalY = Math.sin(angle + Math.PI / 2)
-  return [
-    `M ${baseX + normalX * arrowWidth} ${baseY + normalY * arrowWidth}`,
-    `L ${tip.x} ${tip.y}`,
-    `L ${baseX - normalX * arrowWidth} ${baseY - normalY * arrowWidth}`,
-  ].join(" ")
+  return {
+    base: { x: baseX, y: baseY },
+    path: [
+      `M ${baseX + normalX * arrowWidth} ${baseY + normalY * arrowWidth}`,
+      `L ${tip.x} ${tip.y}`,
+      `L ${baseX - normalX * arrowWidth} ${baseY - normalY * arrowWidth}`,
+    ].join(" "),
+  }
 }
 
 type GraphSide = "left" | "right" | "top" | "bottom"
 
 function sideAnchor(node: AgentBoardGraphNode, side: GraphSide, offset = 0): GraphPoint {
-  if (side === "left") return { x: node.x - 8, y: node.y + GRAPH_NODE_HEIGHT / 2 + offset }
-  if (side === "right") return { x: node.x + GRAPH_NODE_WIDTH + 8, y: node.y + GRAPH_NODE_HEIGHT / 2 + offset }
-  if (side === "top") return { x: node.x + GRAPH_NODE_WIDTH / 2 + offset, y: node.y - 8 }
-  return { x: node.x + GRAPH_NODE_WIDTH / 2 + offset, y: node.y + GRAPH_NODE_HEIGHT + 8 }
+  if (side === "left") return { x: node.x - GRAPH_EDGE_TERMINAL_GAP, y: node.y + GRAPH_NODE_HEIGHT / 2 + offset }
+  if (side === "right") return { x: node.x + GRAPH_NODE_WIDTH + GRAPH_EDGE_TERMINAL_GAP, y: node.y + GRAPH_NODE_HEIGHT / 2 + offset }
+  if (side === "top") return { x: node.x + GRAPH_NODE_WIDTH / 2 + offset, y: node.y - GRAPH_EDGE_TERMINAL_GAP }
+  return { x: node.x + GRAPH_NODE_WIDTH / 2 + offset, y: node.y + GRAPH_NODE_HEIGHT + GRAPH_EDGE_TERMINAL_GAP }
 }
 
 function sideAngle(side: GraphSide) {
@@ -281,6 +292,23 @@ function sideOut(point: GraphPoint, side: GraphSide, distance: number): GraphPoi
   if (side === "right") return { x: point.x + distance, y: point.y }
   if (side === "top") return { x: point.x, y: point.y - distance }
   return { x: point.x, y: point.y + distance }
+}
+
+function rectsOverlapOrNear(a: AgentBoardGraphNode, b: AgentBoardGraphNode, margin: number) {
+  return !(
+    a.x + GRAPH_NODE_WIDTH + margin < b.x ||
+    b.x + GRAPH_NODE_WIDTH + margin < a.x ||
+    a.y + GRAPH_NODE_HEIGHT + margin < b.y ||
+    b.y + GRAPH_NODE_HEIGHT + margin < a.y
+  )
+}
+
+function outsideLaneForNodes(a: AgentBoardGraphNode, b: AgentBoardGraphNode) {
+  const left = Math.min(a.x, b.x) - GRAPH_EDGE_OUTSIDE_GAP
+  const right = Math.max(a.x + GRAPH_NODE_WIDTH, b.x + GRAPH_NODE_WIDTH) + GRAPH_EDGE_OUTSIDE_GAP
+  return Math.abs(left - (a.x + GRAPH_NODE_WIDTH / 2)) < Math.abs(right - (a.x + GRAPH_NODE_WIDTH / 2))
+    ? left
+    : right
 }
 
 function cubicTangent(start: GraphPoint, c1: GraphPoint, c2: GraphPoint, end: GraphPoint, t: number): GraphPoint {
@@ -346,9 +374,15 @@ function directGraphEdge(
     y: start.y + dy * 0.65 + normal.y * curve,
   }
   const arrowTangent = cubicTangent(start, c1, c2, end, 1)
+  const arrow = graphArrow(end, Math.atan2(arrowTangent.y, arrowTangent.x), active)
+  const lineEnd = arrow.base
+  const lineC2 = {
+    x: start.x + (lineEnd.x - start.x) * 0.65 + normal.x * curve,
+    y: start.y + (lineEnd.y - start.y) * 0.65 + normal.y * curve,
+  }
   return {
-    line: `M ${start.x} ${start.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${end.x} ${end.y}`,
-    arrow: arrowPath(end, Math.atan2(arrowTangent.y, arrowTangent.x), active),
+    line: `M ${start.x} ${start.y} C ${c1.x} ${c1.y}, ${lineC2.x} ${lineC2.y}, ${lineEnd.x} ${lineEnd.y}`,
+    arrow: arrow.path,
   }
 }
 
@@ -367,21 +401,42 @@ function dependencyGraphEdge(
   const sideFlow = Math.abs(dx) >= GRAPH_NODE_WIDTH * 0.45
   const sourceSide: GraphSide = sideFlow ? (dx >= 0 ? "right" : "left") : dy >= 0 ? "bottom" : "top"
   const targetSide: GraphSide = sideFlow ? (dx >= 0 ? "left" : "right") : dy >= 0 ? "top" : "bottom"
+  if (rectsOverlapOrNear(source, target, GRAPH_EDGE_APPROACH_CLEARANCE)) {
+    const laneX = outsideLaneForNodes(source, target)
+    const sourceSide: GraphSide = laneX < source.x ? "left" : "right"
+    const targetSide: GraphSide = laneX < target.x ? "left" : "right"
+    const start = sideAnchor(source, sourceSide, 0)
+    const end = sideAnchor(target, targetSide, 0)
+    const arrow = graphArrow(end, sideAngle(targetSide), active)
+    return {
+      line: roundedPolylinePath(
+        [
+          start,
+          { x: laneX, y: start.y },
+          { x: laneX, y: arrow.base.y },
+          arrow.base,
+        ],
+        36,
+      ),
+      arrow: arrow.path,
+    }
+  }
   const start = sideAnchor(source, sourceSide, 0)
   const end = sideAnchor(target, targetSide, 0)
+  const arrow = graphArrow(end, sideAngle(targetSide), active)
   if (sideFlow) {
     const laneX = (start.x + end.x) / 2
     return {
-      line: roundedElbowPath(start, laneX, end),
-      arrow: arrowPath(end, sideAngle(targetSide), active),
+      line: roundedElbowPath(start, laneX, arrow.base),
+      arrow: arrow.path,
     }
   }
   const control = Math.max(36, Math.min(90, Math.hypot(dx, dy) * 0.14))
   const c1 = sideOut(start, sourceSide, control)
-  const c2 = sideOut(end, targetSide, control)
+  const c2 = sideOut(arrow.base, targetSide, control)
   return {
-    line: `M ${start.x} ${start.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${end.x} ${end.y}`,
-    arrow: arrowPath(end, sideAngle(targetSide), active),
+    line: `M ${start.x} ${start.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${arrow.base.x} ${arrow.base.y}`,
+    arrow: arrow.path,
   }
 }
 
@@ -401,18 +456,19 @@ function routeGraphEdge(
     const laneX = Math.min(source.x, target.x) - GRAPH_EDGE_APPROACH_CLEARANCE - 52 - edgeOffset * 18
     const start = sideAnchor(source, "left", 0)
     const end = sideAnchor(target, "left", 0)
+    const arrow = graphArrow(end, 0, active)
     const line = roundedPolylinePath(
       [
         start,
         { x: laneX, y: start.y },
-        { x: laneX, y: end.y },
-        end,
+        { x: laneX, y: arrow.base.y },
+        arrow.base,
       ],
       34,
     )
     return {
       line,
-      arrow: arrowPath(end, 0, active),
+      arrow: arrow.path,
     }
   }
   const forward = targetCenter.x >= sourceCenter.x
@@ -504,15 +560,17 @@ function routeGraphEdge(
   })
   const elbowScore = scoreGraphRouteSegments(elbowSegments, obstacleRects, midpoint, (start.y + end.y) / 2)
   const bestDetour = detours.reduce((best, candidate) => (candidate.score < best.score ? candidate : best))
+  const arrow = graphArrow(end, forward ? 0 : Math.PI, active)
   if (bestDetour.score + 12 < elbowScore) {
+    const points = [...bestDetour.points.slice(0, -1), arrow.base]
     return {
-      line: roundedPolylinePath(bestDetour.points, 30),
-      arrow: arrowPath(end, forward ? 0 : Math.PI, active),
+      line: roundedPolylinePath(points, 30),
+      arrow: arrow.path,
     }
   }
   return {
-    line: roundedElbowPath(start, laneX, end),
-    arrow: arrowPath(end, forward ? 0 : Math.PI, active),
+    line: roundedElbowPath(start, laneX, arrow.base),
+    arrow: arrow.path,
   }
 }
 
@@ -740,11 +798,11 @@ function GraphNodeCard(props: {
       <div class="min-h-0 flex-1 overflow-hidden pt-2">
         <h3 class="line-clamp-2 text-13-semibold leading-snug text-text-strong">{card().issue.title}</h3>
       </div>
-      <div class="mt-2 flex h-5 shrink-0 items-center justify-between gap-2 text-11-regular">
+      <div class="mt-2 flex h-5 shrink-0 items-center gap-2 text-11-regular">
         <span class={`max-w-[8.5rem] truncate ${issueIDTone()}`}>{card().issue.id}</span>
         <Show when={props.node.blockedBy > 0}>
           <span
-            class="flex min-w-0 flex-1 items-center justify-end gap-1.5 text-text-weak"
+            class="ml-auto inline-flex min-w-0 max-w-[7rem] items-center gap-1 text-text-weak"
             title={`${dependencyLabel(props.node)} visible in this graph view`}
           >
             <Icon name="branch" class="size-3 shrink-0" />
@@ -1034,10 +1092,15 @@ export function GraphMode(props: {
   })
   const minimapNodes = createMemo(() => {
     const bounds = minimapWorldBounds()
+    const focused = focusedIDs()
+    const focusedNode = focusID()
     return visibleGraph().nodes.map((node) => ({
       id: node.card.issue.id,
       column: node.card.column,
       selected: node.card.issue.id === props.selectedID,
+      active: node.card.issue.id === focusedNode,
+      related: focused.has(node.card.issue.id),
+      muted: focusedNode !== undefined && !focused.has(node.card.issue.id),
       x: clamp(((node.x + GRAPH_NODE_WIDTH / 2 - bounds.minX) / bounds.width) * 100, 1.5, 98.5),
       y: clamp(((node.y + GRAPH_NODE_HEIGHT / 2 - bounds.minY) / bounds.height) * 100, 1.5, 98.5),
     }))
@@ -1048,7 +1111,10 @@ export function GraphMode(props: {
       const source = nodes.get(edge.sourceIssueID)
       const target = nodes.get(edge.targetIssueID)
       if (!source || !target) return []
-      return [{ id: edge.id, x1: source.x, y1: source.y, x2: target.x, y2: target.y, critical: edge.critical }]
+      const focused = focusID()
+      const active = focused !== undefined && (edge.sourceIssueID === focused || edge.targetIssueID === focused)
+      const muted = focused !== undefined && !active
+      return [{ id: edge.id, x1: source.x, y1: source.y, x2: target.x, y2: target.y, critical: edge.critical, active, muted }]
     })
   })
 
@@ -1327,17 +1393,15 @@ export function GraphMode(props: {
                   class={edge.tone}
                   opacity={edge.opacity}
                 >
-                  <Show when={edge.active}>
-                    <path
-                      d={edge.shape.line}
-                      fill="none"
-                      stroke="var(--background-base)"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width={9}
-                      opacity={0.96}
-                    />
-                  </Show>
+                  <path
+                    d={edge.shape.line}
+                    fill="none"
+                    stroke="var(--background-base)"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width={9}
+                    opacity={0.96}
+                  />
                   <path
                     d={edge.shape.line}
                     fill="none"
@@ -1433,22 +1497,37 @@ export function GraphMode(props: {
                     y1={edge.y1}
                     x2={edge.x2}
                     y2={edge.y2}
-                    stroke={edge.critical ? "rgba(255, 123, 114, 0.46)" : "rgba(139, 148, 158, 0.30)"}
-                    stroke-width={edge.critical ? 0.7 : 0.45}
+                    stroke={
+                      edge.active
+                        ? "rgba(255, 255, 255, 0.72)"
+                        : edge.critical
+                          ? "rgba(255, 123, 114, 0.50)"
+                          : "rgba(139, 148, 158, 0.34)"
+                    }
+                    stroke-opacity={edge.muted ? 0.28 : 1}
+                    stroke-width={edge.active ? 0.9 : edge.critical ? 0.7 : 0.45}
                     vector-effect="non-scaling-stroke"
                   />
                 )}
               </For>
               <For each={minimapNodes()}>
                 {(node) => (
-                  <circle
-                    cx={node.x}
-                    cy={node.y}
-                    r={node.selected ? 2.6 : node.column === "closed" ? 1.25 : 1.8}
+                  <rect
+                    x={node.x - (node.active || node.selected ? 2.6 : node.column === "closed" ? 1.7 : 2.1)}
+                    y={node.y - (node.active || node.selected ? 1.8 : node.column === "closed" ? 1.1 : 1.35)}
+                    width={node.active || node.selected ? 5.2 : node.column === "closed" ? 3.4 : 4.2}
+                    height={node.active || node.selected ? 3.6 : node.column === "closed" ? 2.2 : 2.7}
+                    rx={0.8}
                     fill={MINIMAP_STATUS_FILL[node.column]}
-                    fill-opacity={node.column === "closed" ? 0.58 : 0.92}
-                    stroke={node.selected ? "rgba(255, 255, 255, 0.9)" : "rgba(13, 17, 23, 0.72)"}
-                    stroke-width={node.selected ? 0.85 : 0.35}
+                    fill-opacity={node.muted ? 0.22 : node.column === "closed" ? 0.64 : 0.95}
+                    stroke={
+                      node.active || node.selected
+                        ? "rgba(255, 255, 255, 0.92)"
+                        : node.related
+                          ? "rgba(255, 255, 255, 0.52)"
+                          : "rgba(13, 17, 23, 0.72)"
+                    }
+                    stroke-width={node.active || node.selected ? 0.95 : node.related ? 0.6 : 0.35}
                     vector-effect="non-scaling-stroke"
                   />
                 )}
