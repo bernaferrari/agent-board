@@ -2,6 +2,7 @@ import { Button } from "@opencode-ai/ui/button"
 import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
 import { Icon } from "@opencode-ai/ui/icon"
 import { showToast } from "@opencode-ai/ui/toast"
+import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { base64Encode } from "@opencode-ai/core/util/encode"
 import { useNavigate } from "@solidjs/router"
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js"
@@ -13,11 +14,12 @@ import {
   type DragEvent,
 } from "@thisbeyond/solid-dnd"
 import {
-  EpicFilterMenu,
   HelpMenu,
   LoadingState,
   SetupState,
+  WorkFilterMenu,
   type EpicSummary,
+  type TypeSummary,
 } from "./agentboard-controls"
 import {
   CardDragLayer,
@@ -61,6 +63,7 @@ import {
   buildEpicChildren,
   extractLabels,
   issueType,
+  ISSUE_TYPE_META,
 } from "./issue-utils"
 import { BoardListView } from "./list-view"
 import {
@@ -132,6 +135,7 @@ export default function AgentBoardPage() {
   const [query, setQuery] = createSignal("")
   const [viewMode, setViewMode] = createSignal<AgentBoardViewMode>("board")
   const [activeEpicID, setActiveEpicID] = createSignal<string>()
+  const [activeIssueType, setActiveIssueType] = createSignal<string>()
   const [drawerTab, setDrawerTab] = createSignal<DrawerTab>("details")
   const [drawerID, setDrawerID] = createSignal<string>()
   const [drawerOpen, setDrawerOpen] = createSignal(false)
@@ -191,6 +195,21 @@ export default function AgentBoardPage() {
       .sort((a, b) => b[1] - a[1])
       .map(([label]) => label)
   })
+  const typeMeta = createMemo<TypeSummary[]>(() => {
+    const counts = new Map<string, number>()
+    for (const card of allCards()) {
+      const type = issueType(card.issue)
+      if (!type || type === "epic") continue
+      counts.set(type, (counts.get(type) ?? 0) + 1)
+    }
+    return Array.from(counts.entries())
+      .map(([id, count]) => ({
+        id,
+        label: ISSUE_TYPE_META[id]?.label ?? id.replaceAll(/[-_]/g, " ").replace(/\b\w/g, (char) => char.toUpperCase()),
+        count,
+      }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+  })
   const epicMeta = createMemo<EpicSummary[]>(() => {
     const cards = allCards()
     const deps = board()?.graph.dependencies ?? []
@@ -226,16 +245,25 @@ export default function AgentBoardPage() {
     if (epicMeta().some((meta) => meta.id === id)) return
     setActiveEpicID(undefined)
   })
+  createEffect(() => {
+    const type = activeIssueType()
+    if (!type) return
+    if (typeMeta().some((meta) => meta.id === type)) return
+    setActiveIssueType(undefined)
+  })
   const filteredColumns = createMemo(() => {
     const term = query().trim().toLowerCase()
     const current = board()
     const childIDs = activeEpic()?.childIDs
+    const type = activeIssueType()
     if (!current) return []
     return current.columns.map((column) => ({
       ...column,
       cards: column.cards.filter((card) => {
-        if (issueType(card.issue) === "epic") return false
+        const cardType = issueType(card.issue)
+        if (cardType === "epic") return false
         if (childIDs && !childIDs.has(card.issue.id)) return false
+        if (type && cardType !== type) return false
         if (!term) return true
         const haystack = [
           card.issue.id,
@@ -253,6 +281,14 @@ export default function AgentBoardPage() {
         return haystack.includes(term)
       }),
     }))
+  })
+  const filteredBoard = createMemo(() => {
+    const current = board()
+    if (!current) return
+    return {
+      ...current,
+      columns: filteredColumns(),
+    }
   })
   const visibleCardCount = createMemo(() => filteredColumns().reduce((total, column) => total + column.cards.length, 0))
   const searchableCardCount = createMemo(() => searchableCards().length)
@@ -475,9 +511,20 @@ export default function AgentBoardPage() {
     navigate(`/${slug}/session?prompt=${encodeURIComponent(prompt)}`)
   }
 
-  function selectCard(issueID: string | undefined) {
+  function revealCard(issueID: string) {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        document
+          .querySelector<HTMLElement>(`[data-agentboard-card="${CSS.escape(issueID)}"]`)
+          ?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" })
+      })
+    })
+  }
+
+  function selectCard(issueID: string | undefined, options?: { reveal?: boolean }) {
     setSelectedID(issueID)
     setDrawerTab("details")
+    if (issueID && options?.reveal) revealCard(issueID)
   }
 
   async function createIssue(input: ComposerSubmit) {
@@ -957,23 +1004,31 @@ export default function AgentBoardPage() {
         {(mount) => (
           <Portal mount={mount()}>
             <div class="flex items-center gap-2">
-              <Show when={epicMeta().length > 0}>
-                <EpicFilterMenu
+              <Show when={epicMeta().length > 0 || typeMeta().length > 0}>
+                <WorkFilterMenu
                   epics={epicMeta()}
-                  activeID={activeEpicID()}
-                  onSelect={(id) => setActiveEpicID(id)}
+                  types={typeMeta()}
+                  activeEpicID={activeEpicID()}
+                  activeType={activeIssueType()}
+                  onSelectEpic={setActiveEpicID}
+                  onSelectType={setActiveIssueType}
+                  onClear={() => {
+                    setActiveEpicID(undefined)
+                    setActiveIssueType(undefined)
+                  }}
                 />
               </Show>
-              <Button
-                variant="ghost"
-                icon="reset"
-                class="titlebar-icon h-6 w-8 p-0"
-                onClick={() => void load()}
-                disabled={loading()}
-                aria-label="Refresh AgentBoard"
-                title="Refresh AgentBoard"
-              >
-              </Button>
+              <Tooltip placement="top" value="Refresh AgentBoard">
+                <Button
+                  variant="ghost"
+                  icon="reset"
+                  class="titlebar-icon h-6 w-8 p-0"
+                  onClick={() => void load()}
+                  disabled={loading()}
+                  aria-label="Refresh AgentBoard"
+                >
+                </Button>
+              </Tooltip>
               <HelpMenu />
               {modeSwitch()}
             </div>
@@ -1007,16 +1062,25 @@ export default function AgentBoardPage() {
                 />
               </Show>
               <Show when={!titlebarRightMount()}>
-                <Show when={epicMeta().length > 0}>
-                  <EpicFilterMenu
+                <Show when={epicMeta().length > 0 || typeMeta().length > 0}>
+                  <WorkFilterMenu
                     epics={epicMeta()}
-                    activeID={activeEpicID()}
-                    onSelect={(id) => setActiveEpicID(id)}
+                    types={typeMeta()}
+                    activeEpicID={activeEpicID()}
+                    activeType={activeIssueType()}
+                    onSelectEpic={setActiveEpicID}
+                    onSelectType={setActiveIssueType}
+                    onClear={() => {
+                      setActiveEpicID(undefined)
+                      setActiveIssueType(undefined)
+                    }}
                   />
                 </Show>
-                <Button variant="secondary" size="small" icon="reset" onClick={() => void load()} disabled={loading()}>
-                  Refresh
-                </Button>
+                <Tooltip placement="top" value="Refresh AgentBoard">
+                  <Button variant="secondary" size="small" icon="reset" onClick={() => void load()} disabled={loading()}>
+                    Refresh
+                  </Button>
+                </Tooltip>
                 <HelpMenu />
                 {modeSwitch()}
               </Show>
@@ -1206,7 +1270,7 @@ export default function AgentBoardPage() {
                   }
                 >
                   <GraphMode
-                    board={current()}
+                    board={filteredBoard() ?? current()}
                     query={query()}
                     selectedID={selectedID()}
                     busy={busy()}
@@ -1280,7 +1344,7 @@ export default function AgentBoardPage() {
                 const sessionID = card().latestRun?.opencodeSessionID
                 if (sessionID) navigate(`/${base64Encode(sdk.directory)}/session/${sessionID}`)
               }}
-              onSelectCard={selectCard}
+              onSelectCard={(issueID) => selectCard(issueID, { reveal: true })}
             />
           </div>
         )}

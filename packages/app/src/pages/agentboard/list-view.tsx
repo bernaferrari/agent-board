@@ -144,6 +144,7 @@ function BoardListRow(props: {
       <article
         role="button"
         tabindex="0"
+        data-agentboard-card={props.card.issue.id}
         aria-label={`${props.card.issue.id} - ${props.card.issue.title}`}
         class="group relative flex w-full cursor-pointer items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-surface-raised-base/55 focus-visible:bg-surface-raised-base/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-border-strong-base"
         classList={{

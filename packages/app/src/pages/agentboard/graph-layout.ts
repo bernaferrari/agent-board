@@ -333,15 +333,22 @@ function layoutDependencyIsland(
   }
 
   const maxRows = Math.max(1, ...Array.from(orderedByLayer.values()).map((nodes) => nodes.length))
+  const rowGap =
+    maxRows > 36
+      ? Math.max(options.nodeHeight + 28, options.rowGap * 0.72)
+      : maxRows > 14
+        ? Math.max(options.nodeHeight + 36, options.rowGap * 0.82)
+        : options.rowGap
+  const shouldTopAlign = maxRows > 14
   for (const layerIndex of layerIndexes) {
     const nodes = orderedByLayer.get(layerIndex) ?? []
     const x = center.x + (maxLayer - layerIndex) * options.columnGap
-    const topOffset = ((maxRows - nodes.length) * options.rowGap) / 2
+    const topOffset = shouldTopAlign ? 0 : ((maxRows - nodes.length) * rowGap) / 2
     nodes.forEach((node, index) => {
       positions.push({
         issueID: node.id,
         x: x - options.nodeWidth / 2,
-        y: center.y + topOffset + index * options.rowGap - options.nodeHeight / 2,
+        y: center.y + topOffset + index * rowGap - options.nodeHeight / 2,
         pinned: true,
       })
     })
@@ -412,17 +419,25 @@ export function buildGraphDependencyLayout(
       a.id.localeCompare(b.id),
   )
   if (isolatedSorted.length > 0) {
-    const columns = isolatedSorted.length > 22 ? Math.ceil(isolatedSorted.length / 22) : 1
+    const targetRows = Math.max(8, Math.ceil(Math.sqrt(isolatedSorted.length * 1.35)))
+    const columns = Math.max(1, Math.ceil(isolatedSorted.length / targetRows))
     const rows = Math.ceil(isolatedSorted.length / columns)
     const listX = connectedBounds.maxX + options.columnGap
-    const listTop = connectedBounds.minY + Math.max(0, (connectedBounds.height - rows * options.rowGap) / 2)
+    const rowGap =
+      rows > 36
+        ? Math.max(options.nodeHeight + 28, options.rowGap * 0.72)
+        : rows > 14
+          ? Math.max(options.nodeHeight + 36, options.rowGap * 0.82)
+          : options.rowGap
+    const listTop =
+      rows > 14 ? connectedBounds.minY : connectedBounds.minY + Math.max(0, (connectedBounds.height - rows * rowGap) / 2)
     isolatedSorted.forEach((node, index) => {
       const column = Math.floor(index / rows)
       const row = index % rows
       positions.push({
         issueID: node.id,
         x: listX + column * options.columnGap,
-        y: listTop + row * options.rowGap,
+        y: listTop + row * rowGap,
         pinned: true,
       })
       layers[node.id] = -1

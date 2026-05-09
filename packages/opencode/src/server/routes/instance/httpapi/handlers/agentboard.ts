@@ -2,13 +2,24 @@ import { AgentBoardRoutes } from "@/agentboard/routes"
 import { InstanceRef } from "@/effect/instance-ref"
 import { Effect, Stream } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
+import { Hono } from "hono"
+
+function agentBoardApp(worktree: string) {
+  const routes = AgentBoardRoutes({ worktree })
+  return new Hono().route("/", routes).route("/agentboard", routes)
+}
 
 function honoRequest(request: HttpServerRequest.HttpServerRequest) {
   if (request.source instanceof Request) return request.source
-  return new Request(new URL(request.url, "http://localhost"), {
+  const init: RequestInit & { duplex?: "half" } = {
     method: request.method,
     headers: request.headers,
-  })
+  }
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    init.body = Stream.toReadableStream(request.stream)
+    init.duplex = "half"
+  }
+  return new Request(new URL(request.url, "http://localhost"), init)
 }
 
 function honoResponse(response: Response) {
@@ -39,7 +50,7 @@ export const agentBoardRoute = HttpRouter.use((router) =>
         const request = yield* HttpServerRequest.HttpServerRequest
         const instance = yield* InstanceRef
         if (!instance) return HttpServerResponse.text("No AgentBoard instance context", { status: 500 })
-        const app = AgentBoardRoutes({ worktree: instance.worktree })
+        const app = agentBoardApp(instance.worktree)
         const response = yield* Effect.tryPromise(() => Promise.resolve(app.fetch(honoRequest(request))))
         return honoResponse(response)
       }),

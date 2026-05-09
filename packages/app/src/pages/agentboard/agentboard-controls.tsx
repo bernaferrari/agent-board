@@ -2,6 +2,7 @@ import { Button } from "@opencode-ai/ui/button"
 import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
 import { Icon } from "@opencode-ai/ui/icon"
 import { showToast } from "@opencode-ai/ui/toast"
+import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { For, Show } from "solid-js"
 import { BEADS_DOCS_URL } from "./prompts"
 import { ISSUE_TYPE_META } from "./issue-utils"
@@ -12,6 +13,12 @@ export type EpicSummary = {
   childCount: number
   closedCount: number
   childIDs: Set<string>
+}
+
+export type TypeSummary = {
+  id: string
+  label: string
+  count: number
 }
 
 function isMissingBeads(message?: string) {
@@ -69,13 +76,14 @@ export function LoadingState() {
 export function HelpMenu() {
   return (
     <DropdownMenu gutter={6} placement="bottom-end">
-      <DropdownMenu.Trigger
-        class="inline-flex h-6 w-6 items-center justify-center rounded-md text-text-weak ring-1 ring-inset ring-transparent transition-colors hover:bg-surface-raised-base hover:text-text-base data-[expanded]:bg-surface-raised-base-active data-[expanded]:text-text-strong data-[expanded]:ring-border-base"
-        aria-label="About AgentBoard"
-        title="About AgentBoard"
-      >
-        <span class="text-12-semibold">?</span>
-      </DropdownMenu.Trigger>
+      <Tooltip placement="top" value="About AgentBoard">
+        <DropdownMenu.Trigger
+          class="inline-flex h-6 w-6 items-center justify-center rounded-md text-text-weak ring-1 ring-inset ring-transparent transition-colors hover:bg-surface-raised-base hover:text-text-base data-[expanded]:bg-surface-raised-base-active data-[expanded]:text-text-strong data-[expanded]:ring-border-base"
+          aria-label="About AgentBoard"
+        >
+          <span class="text-12-semibold">?</span>
+        </DropdownMenu.Trigger>
+      </Tooltip>
       <DropdownMenu.Portal>
         <DropdownMenu.Content class="w-80 p-3">
           <h3 class="text-13-semibold text-text-strong">About AgentBoard</h3>
@@ -135,62 +143,92 @@ export function HelpMenu() {
   )
 }
 
-export function EpicFilterMenu(props: {
+export function WorkFilterMenu(props: {
   epics: EpicSummary[]
-  activeID?: string
-  onSelect: (id: string | undefined) => void
+  types: TypeSummary[]
+  activeEpicID?: string
+  activeType?: string
+  onSelectEpic: (id: string | undefined) => void
+  onSelectType: (type: string | undefined) => void
+  onClear: () => void
 }) {
-  const epicAccent = ISSUE_TYPE_META.epic
-  const activeEpic = () => props.epics.find((epic) => epic.id === props.activeID)
-  const buttonLabel = () => activeEpic()?.title ?? "Epics"
+  const activeEpic = () => props.epics.find((epic) => epic.id === props.activeEpicID)
+  const activeType = () => props.types.find((type) => type.id === props.activeType)
+  const activeCount = () => (props.activeEpicID ? 1 : 0) + (props.activeType ? 1 : 0)
+  const buttonLabel = () => activeType()?.label ?? activeEpic()?.title ?? "Filter"
+  const typeIcon = (type: string) => ISSUE_TYPE_META[type]?.icon ?? "bullet-list"
+  const typeIconClass = (type: string) => ISSUE_TYPE_META[type]?.iconClass ?? "text-text-muted"
   return (
     <DropdownMenu gutter={6} placement="bottom-end">
-      <DropdownMenu.Trigger
-        class="inline-flex h-6 max-w-36 items-center gap-1.5 rounded-md px-2 text-10-semibold ring-1 ring-inset transition-colors data-[expanded]:bg-surface-raised-base-active data-[expanded]:text-text-strong data-[expanded]:ring-border-base"
-        classList={{
-          "bg-surface-raised-base-active text-text-strong ring-border-base": !!props.activeID,
-          "text-text-weak ring-transparent hover:bg-surface-raised-base hover:text-text-base": !props.activeID,
-        }}
-      >
-        <Icon name={epicAccent.icon} class={`size-3 ${props.activeID ? epicAccent.iconClass : ""}`} />
-        <span class="truncate">{buttonLabel()}</span>
-        <Show when={!props.activeID}>
-          <span class="rounded bg-surface-raised-base px-1 py-0.5 text-10-semibold tabular-nums text-text-base ring-1 ring-inset ring-border-weaker-base">
-            {props.epics.length}
-          </span>
-        </Show>
-        <Icon name="chevron-down" class="size-3 text-text-muted" />
-      </DropdownMenu.Trigger>
+      <Tooltip placement="top" value="Filter by type or epic">
+        <DropdownMenu.Trigger
+          class="inline-flex h-6 max-w-40 items-center gap-1.5 rounded-md px-2 text-10-semibold ring-1 ring-inset transition-colors data-[expanded]:bg-surface-raised-base-active data-[expanded]:text-text-strong data-[expanded]:ring-border-base"
+          classList={{
+            "bg-surface-raised-base-active text-text-strong ring-border-base": activeCount() > 0,
+            "text-text-weak ring-transparent hover:bg-surface-raised-base hover:text-text-base": activeCount() === 0,
+          }}
+        >
+          <Icon name="sliders" class="size-3" />
+          <span class="truncate">{buttonLabel()}</span>
+          <Show when={activeCount() > 0}>
+            <span class="rounded bg-surface-raised-base px-1 py-0.5 text-10-semibold tabular-nums text-text-base ring-1 ring-inset ring-border-weaker-base">
+              {activeCount()}
+            </span>
+          </Show>
+          <Icon name="chevron-down" class="size-3 text-text-muted" />
+        </DropdownMenu.Trigger>
+      </Tooltip>
       <DropdownMenu.Portal>
         <DropdownMenu.Content class="w-80">
           <div class="flex items-center justify-between px-2 py-1">
-            <div class="text-11-semibold uppercase tracking-wider text-text-muted">Epics</div>
-            <DropdownMenu.Item disabled={!props.activeID} onSelect={() => props.onSelect(undefined)}>
-              <DropdownMenu.ItemLabel>All work</DropdownMenu.ItemLabel>
+            <div class="text-11-semibold uppercase tracking-wider text-text-muted">Filters</div>
+            <DropdownMenu.Item disabled={activeCount() === 0} onSelect={props.onClear}>
+              <DropdownMenu.ItemLabel>Clear</DropdownMenu.ItemLabel>
             </DropdownMenu.Item>
           </div>
-          <DropdownMenu.Separator />
-          <div class="max-h-72 overflow-y-auto">
-            <For each={props.epics}>
-              {(epic) => {
-                const active = () => props.activeID === epic.id
-                const progress = () => `${epic.closedCount}/${epic.childCount}`
+          <Show when={props.types.length > 0}>
+            <DropdownMenu.Separator />
+            <div class="px-2 py-1 text-10-semibold uppercase tracking-wider text-text-muted">Type</div>
+            <For each={props.types}>
+              {(type) => {
+                const active = () => props.activeType === type.id
                 return (
-                  <DropdownMenu.Item
-                    class="min-w-0"
-                    title={`${epic.id} · ${epic.title}`}
-                    onSelect={() => props.onSelect(active() ? undefined : epic.id)}
-                  >
-                    <Icon name={epicAccent.icon} class={`size-3.5 ${epicAccent.iconClass}`} />
-                    <DropdownMenu.ItemLabel class="min-w-0 truncate">{epic.title}</DropdownMenu.ItemLabel>
-                    <span class="ml-2 shrink-0 rounded bg-surface-raised-base px-1.5 py-0.5 text-10-semibold tabular-nums text-text-weak ring-1 ring-inset ring-border-weaker-base">
-                      {progress()}
+                  <DropdownMenu.Item onSelect={() => props.onSelectType(active() ? undefined : type.id)}>
+                    <Icon name={typeIcon(type.id)} class={`size-3.5 ${typeIconClass(type.id)}`} />
+                    <DropdownMenu.ItemLabel>{type.label}</DropdownMenu.ItemLabel>
+                    <span class="ml-auto shrink-0 rounded bg-surface-raised-base px-1.5 py-0.5 text-10-semibold tabular-nums text-text-weak ring-1 ring-inset ring-border-weaker-base">
+                      {type.count}
                     </span>
                   </DropdownMenu.Item>
                 )
               }}
             </For>
-          </div>
+          </Show>
+          <Show when={props.epics.length > 0}>
+            <DropdownMenu.Separator />
+            <div class="px-2 py-1 text-10-semibold uppercase tracking-wider text-text-muted">Epic</div>
+            <div class="max-h-64 overflow-y-auto">
+              <For each={props.epics}>
+                {(epic) => {
+                  const active = () => props.activeEpicID === epic.id
+                  const progress = () => `${epic.closedCount}/${epic.childCount}`
+                  return (
+                    <DropdownMenu.Item
+                      class="min-w-0"
+                      title={`${epic.id} · ${epic.title}`}
+                      onSelect={() => props.onSelectEpic(active() ? undefined : epic.id)}
+                    >
+                      <Icon name={ISSUE_TYPE_META.epic.icon} class={`size-3.5 ${ISSUE_TYPE_META.epic.iconClass}`} />
+                      <DropdownMenu.ItemLabel class="min-w-0 truncate">{epic.title}</DropdownMenu.ItemLabel>
+                      <span class="ml-2 shrink-0 rounded bg-surface-raised-base px-1.5 py-0.5 text-10-semibold tabular-nums text-text-weak ring-1 ring-inset ring-border-weaker-base">
+                        {progress()}
+                      </span>
+                    </DropdownMenu.Item>
+                  )
+                }}
+              </For>
+            </div>
+          </Show>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu>
@@ -213,20 +251,18 @@ export function SetupState(props: {
       <Show
         when={missing()}
         fallback={
-          <div class="-mt-4 w-full max-w-xl rounded-xl border border-border-weaker-base bg-surface-panel p-6 shadow-xs-border-base">
-            <div class="flex items-start gap-4">
-              <div class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-surface-raised-base text-text-strong shadow-xs-border-base">
-                <Icon name="warning" class="size-5" />
-              </div>
-              <div class="min-w-0 flex-1">
-                <h2 class="text-18-semibold text-text-strong">AgentBoard could not load</h2>
-                <p class="mt-2 text-13-regular leading-relaxed text-text-base">{shortError(props.error)}</p>
-                <div class="mt-4 flex flex-wrap items-center gap-2">
-                  <Button variant="ghost" size="large" icon="bubble-5" onClick={props.onChat}>
-                    Ask chat to help
-                  </Button>
-                </div>
-              </div>
+          <div class="w-full max-w-md text-center">
+            <div class="mx-auto mb-4 flex size-12 items-center justify-center rounded-xl bg-surface-raised-base text-text-strong shadow-md">
+              <Icon name="warning" class="size-5" />
+            </div>
+            <h2 class="text-20-medium text-text-strong [text-wrap:balance]">AgentBoard couldn't load</h2>
+            <p class="mx-auto mt-2 max-w-sm text-13-regular leading-relaxed text-text-weak">
+              {shortError(props.error)}
+            </p>
+            <div class="mt-5 flex justify-center">
+              <Button size="large" icon="bubble-5" onClick={props.onChat}>
+                Ask chat to help
+              </Button>
             </div>
           </div>
         }
