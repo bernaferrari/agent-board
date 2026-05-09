@@ -35,8 +35,8 @@ Requirements:
 - Beads `bd` CLI available on `PATH`
 
 ```bash
-git clone <this-fork-url>
-cd opencode
+git clone https://github.com/bernaferrari/opencode-agentboard
+cd opencode-agentboard
 bun install
 bun run dev:desktop
 ```
@@ -85,7 +85,7 @@ Upstream OpenCode:
 
 ## Status
 
-Prototype. The core desktop loop works, but the UI, graph layout, Beads integration, and review workflow are still being refined.
+Experimental preview. The core desktop loop works today: open a project, initialize Beads, create issues, move through board/list/graph, and hand work to chat. Graph layout and deeper automation are still evolving.
 
 ## License
 

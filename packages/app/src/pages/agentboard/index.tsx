@@ -298,7 +298,6 @@ export default function AgentBoardPage() {
   const [activeColumnDrag, setActiveColumnDrag] = createSignal<AgentBoardColumnID>()
   const [boardOrder, setBoardOrder] = createSignal<BoardLocalOrder>(loadBoardOrder(sdk.directory))
   const [query, setQuery] = createSignal("")
-  const [timelineOnly, setTimelineOnly] = createSignal(false)
   const [viewMode, setViewMode] = createSignal<AgentBoardViewMode>("board")
   const [activeEpicID, setActiveEpicID] = createSignal<string>()
   const [drawerTab, setDrawerTab] = createSignal<DrawerTab>("details")
@@ -417,7 +416,6 @@ export default function AgentBoardPage() {
       cards: column.cards.filter((card) => {
         if (issueType(card.issue) === "epic") return false
         if (childIDs && !childIDs.has(card.issue.id)) return false
-        if (timelineOnly() && card.events.length === 0) return false
         if (!term) return true
         const haystack = [
           card.issue.id,
@@ -1146,18 +1144,6 @@ export default function AgentBoardPage() {
                   onSelect={(id) => setActiveEpicID(id)}
                 />
               </Show>
-              {/* Temporary timeline debug filter; keep the state wired for quick local debugging.
-              <Button
-                variant={timelineOnly() ? "secondary" : "ghost"}
-                size="small"
-                class="h-6 px-2 text-10-semibold"
-                onClick={() => setTimelineOnly(!timelineOnly())}
-                aria-pressed={timelineOnly()}
-                title="Temporary debug filter: show only cards with timeline events"
-              >
-                Timeline
-              </Button>
-              */}
               <Button
                 variant="ghost"
                 icon="reset"
@@ -1212,17 +1198,6 @@ export default function AgentBoardPage() {
                   Refresh
                 </Button>
                 <HelpMenu />
-                {/* Temporary timeline debug filter; keep the state wired for quick local debugging.
-                <Button
-                  variant={timelineOnly() ? "secondary" : "ghost"}
-                  size="small"
-                  onClick={() => setTimelineOnly(!timelineOnly())}
-                  aria-pressed={timelineOnly()}
-                  title="Temporary debug filter: show only cards with timeline events"
-                >
-                  Timeline
-                </Button>
-                */}
                 {modeSwitch()}
               </Show>
             </div>
