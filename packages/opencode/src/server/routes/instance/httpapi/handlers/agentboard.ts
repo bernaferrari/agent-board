@@ -20,10 +20,16 @@ function honoResponse(response: Response) {
       headers: response.headers,
     })
   }
-  return HttpServerResponse.stream(Stream.fromReadableStream(() => response.body!, (error) => error), {
-    status: response.status,
-    headers: response.headers,
-  })
+  return HttpServerResponse.stream(
+    Stream.fromReadableStream({
+      evaluate: () => response.body!,
+      onError: (error) => error,
+    }),
+    {
+      status: response.status,
+      headers: response.headers,
+    },
+  )
 }
 
 export const agentBoardRoute = HttpRouter.use((router) =>
@@ -33,7 +39,7 @@ export const agentBoardRoute = HttpRouter.use((router) =>
       "/agentboard/*",
       Effect.gen(function* () {
         const request = yield* HttpServerRequest.HttpServerRequest
-        const response = yield* Effect.promise(() => app.fetch(honoRequest(request)))
+        const response = yield* Effect.tryPromise(() => Promise.resolve(app.fetch(honoRequest(request))))
         return honoResponse(response)
       }),
     )
