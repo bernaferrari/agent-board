@@ -155,27 +155,27 @@ export function WorkFilterMenu(props: {
   const activeEpic = () => props.epics.find((epic) => epic.id === props.activeEpicID)
   const activeType = () => props.types.find((type) => type.id === props.activeType)
   const activeCount = () => (props.activeEpicID ? 1 : 0) + (props.activeType ? 1 : 0)
-  const buttonLabel = () => activeType()?.label ?? activeEpic()?.title ?? "Filter"
+  const buttonLabel = () => {
+    const type = activeType()
+    const epic = activeEpic()
+    if (type && epic) return `${type.label} in ${epic.title}`
+    return type?.label ?? epic?.title ?? "Filter"
+  }
   const typeIcon = (type: string) => ISSUE_TYPE_META[type]?.icon ?? "bullet-list"
   const typeIconClass = (type: string) => ISSUE_TYPE_META[type]?.iconClass ?? "text-text-muted"
   return (
     <DropdownMenu gutter={6} placement="bottom-end">
       <Tooltip placement="top" value="Filter by type or epic">
         <DropdownMenu.Trigger
-          class="inline-flex h-6 max-w-40 items-center gap-1.5 rounded-md px-2 text-10-semibold ring-1 ring-inset transition-colors data-[expanded]:bg-surface-raised-base-active data-[expanded]:text-text-strong data-[expanded]:ring-border-base"
+          class="inline-flex h-6 max-w-[260px] items-center gap-1 rounded-md px-2 text-10-semibold ring-1 ring-inset transition-colors data-[expanded]:bg-surface-raised-base-active data-[expanded]:text-text-strong data-[expanded]:ring-border-base"
           classList={{
             "bg-surface-raised-base-active text-text-strong ring-border-base": activeCount() > 0,
             "text-text-weak ring-transparent hover:bg-surface-raised-base hover:text-text-base": activeCount() === 0,
           }}
         >
           <Icon name="sliders" class="size-3" />
-          <span class="truncate">{buttonLabel()}</span>
-          <Show when={activeCount() > 0}>
-            <span class="rounded bg-surface-raised-base px-1 py-0.5 text-10-semibold tabular-nums text-text-base ring-1 ring-inset ring-border-weaker-base">
-              {activeCount()}
-            </span>
-          </Show>
-          <Icon name="chevron-down" class="size-3 text-text-muted" />
+          <span class="min-w-0 truncate">{buttonLabel()}</span>
+          <Icon name="chevron-down" class="size-3 shrink-0 text-text-muted" />
         </DropdownMenu.Trigger>
       </Tooltip>
       <DropdownMenu.Portal>

@@ -861,6 +861,25 @@ export function GraphMode(props: {
       closed: current.nodes.filter((node) => node.card.column === "closed").length,
     }
   })
+  const emptyHint = createMemo(() => {
+    const current = graph()
+    const withoutSearch = buildAgentBoardGraph(props.board, "")
+    if (withoutSearch.nodes.length === 0) return undefined
+    const hints: string[] = []
+    const query = props.query.trim()
+    const queryMatchesNothing = query && withoutSearch.nodes.length > current.nodes.length
+    const filterMatchesNothing =
+      (filter() !== "all" || hideClosed()) &&
+      current.nodes.some((node) => {
+        if (node.card.column === "closed") return true
+        if (filter() === "critical") return !node.critical
+        return false
+      })
+    if (queryMatchesNothing) hints.push("clear search")
+    if (filterMatchesNothing) hints.push("switch filters")
+    if (hints.length === 0) return undefined
+    return `${hints.join(" or ")}.`
+  })
   const visibleGraphInput = createMemo(() => {
     const current = graph()
     const rawNodes = current.nodes.filter((node) => {
@@ -870,9 +889,8 @@ export function GraphMode(props: {
       return true
     })
     const ids = new Set(rawNodes.map((node) => node.id))
-    const edges = reduceTransitiveGraphEdges(
-      current.edges.filter((edge) => ids.has(edge.sourceIssueID) && ids.has(edge.targetIssueID)),
-    )
+    const edges = current.edges.filter((edge) => ids.has(edge.sourceIssueID) && ids.has(edge.targetIssueID))
+    const layoutEdges = reduceTransitiveGraphEdges(edges)
     const signature = [
       filter(),
       hideClosed() ? "closed:hidden" : "closed:visible",
@@ -885,11 +903,11 @@ export function GraphMode(props: {
         .sort()
         .join(","),
     ].join("|")
-    return { current, rawNodes, edges, signature }
+    return { current, rawNodes, edges, layoutEdges, signature }
   })
   const visibleGraph = createMemo(() => {
     const input = visibleGraphInput()
-    const { current, rawNodes, edges } = input
+    const { current, rawNodes, edges, layoutEdges } = input
     const visibleBlockedBy = new Map(rawNodes.map((node) => [node.id, 0]))
     const visibleUnblocks = new Map(rawNodes.map((node) => [node.id, 0]))
     for (const edge of edges) {
@@ -901,7 +919,7 @@ export function GraphMode(props: {
       blockedBy: visibleBlockedBy.get(node.id) ?? 0,
       unblocks: visibleUnblocks.get(node.id) ?? 0,
     }))
-    const automaticNodes = resolveGraphNodeOverlaps(buildGraphSeedNodes(nodesWithVisibleCounts, edges))
+    const automaticNodes = resolveGraphNodeOverlaps(buildGraphSeedNodes(nodesWithVisibleCounts, layoutEdges))
     const auto = autoPositionsSignature() === input.signature ? autoPositions() : {}
     const nodes = automaticNodes.map((node) => {
       const autoPosition = auto[node.id]
@@ -926,6 +944,7 @@ export function GraphMode(props: {
       ...current,
       nodes,
       edges,
+      layoutEdges,
       width: Math.max(960, ...nodes.map((node) => node.x + GRAPH_NODE_WIDTH + GRAPH_FOCUS_PADDING)),
       height: Math.max(560, ...nodes.map((node) => node.y + GRAPH_NODE_HEIGHT + GRAPH_FOCUS_PADDING)),
     }
@@ -1195,7 +1214,8 @@ export function GraphMode(props: {
   }
 
   function arrangeGraph() {
-    const { positions, layers } = buildGraphDependencyLayout(visibleGraph().nodes, visibleGraph().edges, {
+    const current = visibleGraph()
+    const { positions, layers } = buildGraphDependencyLayout(current.nodes, current.layoutEdges, {
       nodeWidth: GRAPH_NODE_WIDTH,
       nodeHeight: GRAPH_NODE_HEIGHT,
       nodeGap: GRAPH_LAYOUT_NODE_GAP,
@@ -1411,7 +1431,9 @@ export function GraphMode(props: {
                 <Icon name="branch" class="size-4 text-text-weak" />
               </div>
               <h3 class="text-14-semibold text-text-strong">No graph nodes match this view.</h3>
-              <p class="mt-1 text-12-regular text-text-weak">Clear search or switch filters.</p>
+              <Show when={emptyHint()}>
+                {(hint) => <p class="mt-1 text-12-regular text-text-weak">{hint()}</p>}
+              </Show>
             </div>
           </div>
         </Show>

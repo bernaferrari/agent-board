@@ -131,19 +131,21 @@ export function GraphMinimap(props: {
           </Show>
         </div>
       </div>
-      <div class="pointer-events-none absolute bottom-4 left-4 hidden max-w-[calc(100%-14rem)] rounded-lg border border-border-weaker-base bg-background-base/92 px-2.5 py-2 shadow-lg backdrop-blur md:flex">
-        <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          <For each={props.columnStats}>
-            {(item) => (
-              <span class="inline-flex items-center gap-1.5 text-11-regular text-text-weak">
-                <span class={`size-2 rounded-full ${COLUMN_ACCENT[item.column].dot}`} />
-                <span class="capitalize">{item.column.replaceAll("_", " ")}</span>
-                <span class="font-mono text-10-semibold tabular-nums text-text-base">{item.count}</span>
-              </span>
-            )}
-          </For>
+      <Show when={props.columnStats.length > 0}>
+        <div class="pointer-events-none absolute bottom-4 left-4 hidden max-w-[calc(100%-14rem)] rounded-lg border border-border-weaker-base bg-background-base/92 px-2.5 py-2 shadow-lg backdrop-blur md:flex">
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <For each={props.columnStats}>
+              {(item) => (
+                <span class="inline-flex items-center gap-1.5 text-11-regular text-text-weak">
+                  <span class={`size-2 rounded-full ${COLUMN_ACCENT[item.column].dot}`} />
+                  <span class="capitalize">{item.column.replaceAll("_", " ")}</span>
+                  <span class="font-mono text-10-semibold tabular-nums text-text-base">{item.count}</span>
+                </span>
+              )}
+            </For>
+          </div>
         </div>
-      </div>
+      </Show>
     </>
   )
 }
