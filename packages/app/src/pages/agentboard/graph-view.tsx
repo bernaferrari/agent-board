@@ -4,6 +4,7 @@ import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js"
 import type { AgentBoardBoard, AgentBoardCard, AgentBoardColumnID, AgentBoardGraphPosition } from "./api"
 import { buildGraphDependencyLayout, getDependencyEdgeNodes } from "./graph-layout"
+import { GraphMinimap } from "./graph-minimap"
 import { buildAgentBoardGraph, type AgentBoardGraphNode } from "./graph-state"
 import { COLUMN_ACCENT, issueIDTone, priorityTone, statusLabel, visibleStatus } from "./ui-tokens"
 
@@ -26,14 +27,6 @@ const GRAPH_EDGE_TERMINAL_GAP = 22
 const GRAPH_EDGE_OUTSIDE_GAP = 72
 const GRAPH_POINTER_OPTIONS: AddEventListenerOptions = { capture: true }
 const GRAPH_EASE = "cubic-bezier(0.22,1,0.36,1)"
-const MINIMAP_STATUS_FILL: Record<AgentBoardColumnID, string> = {
-  blocked: "#ff7b72",
-  ready: "#7ee787",
-  running: "#f2cc60",
-  needs_review: "#79c0ff",
-  closed: "#d2a8ff",
-}
-
 type GraphPoint = {
   x: number
   y: number
@@ -1433,98 +1426,15 @@ export function GraphMode(props: {
           </div>
         </Show>
 
-        <div class="absolute bottom-4 right-4 hidden w-44 rounded-lg border border-border-weaker-base bg-background-base/95 p-2 shadow-lg backdrop-blur md:block">
-          <div class="mb-1 flex items-center justify-between text-10-semibold uppercase tracking-wide text-text-weak">
-            <span>Map</span>
-            <div class="-mr-1 flex items-center gap-1">
-              <span class="tabular-nums">{Math.round(viewport().scale * 100)}%</span>
-              <Tooltip placement="top" value="Fit graph to view">
-                <IconButton
-                  icon="expand"
-                  variant="ghost"
-                  size="small"
-                  onClick={fitGraph}
-                  aria-label="Fit graph to view"
-                />
-              </Tooltip>
-            </div>
-          </div>
-          <div
-            class="relative h-24 cursor-crosshair overflow-hidden rounded-md bg-surface-raised-base shadow-xs-border-base touch-none"
-            onPointerDown={beginMinimapPointer}
-          >
-            <svg class="absolute inset-0 size-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-              <For each={minimapEdges()}>
-                {(edge) => (
-                  <line
-                    x1={edge.x1}
-                    y1={edge.y1}
-                    x2={edge.x2}
-                    y2={edge.y2}
-                    stroke={
-                      edge.active
-                        ? "rgba(255, 255, 255, 0.72)"
-                        : edge.critical
-                          ? "rgba(255, 123, 114, 0.50)"
-                          : "rgba(139, 148, 158, 0.34)"
-                    }
-                    stroke-opacity={edge.muted ? 0.28 : 1}
-                    stroke-width={edge.active ? 0.9 : edge.critical ? 0.7 : 0.45}
-                    vector-effect="non-scaling-stroke"
-                  />
-                )}
-              </For>
-              <For each={minimapNodes()}>
-                {(node) => (
-                  <rect
-                    x={node.x - (node.active || node.selected ? 2.6 : node.column === "closed" ? 1.7 : 2.1)}
-                    y={node.y - (node.active || node.selected ? 1.8 : node.column === "closed" ? 1.1 : 1.35)}
-                    width={node.active || node.selected ? 5.2 : node.column === "closed" ? 3.4 : 4.2}
-                    height={node.active || node.selected ? 3.6 : node.column === "closed" ? 2.2 : 2.7}
-                    rx={0.8}
-                    fill={MINIMAP_STATUS_FILL[node.column]}
-                    fill-opacity={node.muted ? 0.22 : node.column === "closed" ? 0.64 : 0.95}
-                    stroke={
-                      node.active || node.selected
-                        ? "rgba(255, 255, 255, 0.92)"
-                        : node.related
-                          ? "rgba(255, 255, 255, 0.52)"
-                          : "rgba(13, 17, 23, 0.72)"
-                    }
-                    stroke-width={node.active || node.selected ? 0.95 : node.related ? 0.6 : 0.35}
-                    vector-effect="non-scaling-stroke"
-                  />
-                )}
-              </For>
-            </svg>
-            <Show when={viewportBounds()}>
-              {(bounds) => (
-                <div
-                  class="pointer-events-none absolute z-20 rounded border border-[#58a6ff] bg-[#58a6ff]/12 shadow-[0_0_0_999px_rgba(0,0,0,0.16),0_0_0_1px_rgba(255,255,255,0.16)_inset,0_0_12px_rgba(88,166,255,0.30)]"
-                  style={{
-                    left: `${bounds().left}%`,
-                    top: `${bounds().top}%`,
-                    width: `${bounds().width}%`,
-                    height: `${bounds().height}%`,
-                  }}
-                />
-              )}
-            </Show>
-          </div>
-        </div>
-        <div class="pointer-events-none absolute bottom-4 left-4 hidden max-w-[calc(100%-14rem)] rounded-lg border border-border-weaker-base bg-background-base/92 px-2.5 py-2 shadow-lg backdrop-blur md:flex">
-          <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <For each={columnStats()}>
-              {(item) => (
-                <span class="inline-flex items-center gap-1.5 text-11-regular text-text-weak">
-                  <span class={`size-2 rounded-full ${COLUMN_ACCENT[item.column].dot}`} />
-                  <span class="capitalize">{item.column.replaceAll("_", " ")}</span>
-                  <span class="font-mono text-10-semibold tabular-nums text-text-base">{item.count}</span>
-                </span>
-              )}
-            </For>
-          </div>
-        </div>
+        <GraphMinimap
+          scale={viewport().scale}
+          nodes={minimapNodes()}
+          edges={minimapEdges()}
+          viewportBounds={viewportBounds()}
+          columnStats={columnStats()}
+          onFit={fitGraph}
+          onPointerDown={beginMinimapPointer}
+        />
       </div>
     </div>
   )
