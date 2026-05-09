@@ -1030,16 +1030,6 @@ export function GraphMode(props: {
       }
     }).sort((a, b) => a.paintOrder - b.paintOrder || a.sourceOrder - b.sourceOrder)
   })
-  const stats = createMemo(() => {
-    const current = graph()
-    const visible = visibleGraph()
-    return {
-      nodes: current.nodes.length,
-      edges: current.edges.length,
-      visibleNodes: visible.nodes.length,
-      hiddenNodes: Math.max(0, current.nodes.length - visible.nodes.length),
-    }
-  })
   const columnStats = createMemo(() => {
     const counts = new Map<AgentBoardColumnID, number>()
     for (const node of visibleGraph().nodes) counts.set(node.card.column, (counts.get(node.card.column) ?? 0) + 1)

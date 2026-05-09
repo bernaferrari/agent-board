@@ -180,18 +180,6 @@ export default function AgentBoardPage() {
   })
   const allCards = createMemo(() => board()?.columns.flatMap((column) => column.cards) ?? [])
   const searchableCards = createMemo(() => allCards().filter((card) => issueType(card.issue) !== "epic"))
-  const stats = createMemo(() => {
-    const current = board()
-    const cards = allCards()
-    const get = (id: AgentBoardColumnID) => current?.columns.find((column) => column.id === id)?.cards.length ?? 0
-    return {
-      total: cards.length,
-      ready: get("ready"),
-      running: get("running"),
-      review: get("needs_review"),
-      failed: cards.filter((card) => card.latestRun?.status === "failed").length,
-    }
-  })
   const readyCards = createMemo(() => board()?.columns.find((column) => column.id === "ready")?.cards ?? [])
   const isBoardEmpty = createMemo(() => allCards().length === 0)
   const knownLabels = createMemo(() => {
