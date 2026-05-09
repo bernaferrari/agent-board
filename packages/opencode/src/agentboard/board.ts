@@ -1,4 +1,3 @@
-import { Instance } from "@/project/instance"
 import { Beads, dependenciesFromRawIssues } from "./beads"
 import { AgentBoardReconciler } from "./reconcile"
 import { AgentBoardStore } from "./store"
@@ -30,8 +29,7 @@ export function columnForIssue(base: AgentBoardColumnID, run?: AgentBoardRun): A
   return base
 }
 
-export async function getAgentBoard(): Promise<AgentBoardBoard> {
-  const worktree = Instance.worktree
+export async function getAgentBoard(worktree: string): Promise<AgentBoardBoard> {
   const project = AgentBoardStore.upsertProject({ worktree })
   await AgentBoardReconciler.reconcile(project.id)
   const [blocked, ready, inProgress, closed] = await Promise.all([

@@ -1,9 +1,7 @@
 import { AgentBoardRoutes } from "@/agentboard/routes"
+import { InstanceRef } from "@/effect/instance-ref"
 import { Effect, Stream } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
-import { Hono } from "hono"
-
-const app = new Hono().route("/agentboard", AgentBoardRoutes())
 
 function honoRequest(request: HttpServerRequest.HttpServerRequest) {
   if (request.source instanceof Request) return request.source
@@ -39,6 +37,9 @@ export const agentBoardRoute = HttpRouter.use((router) =>
       "/agentboard/*",
       Effect.gen(function* () {
         const request = yield* HttpServerRequest.HttpServerRequest
+        const instance = yield* InstanceRef
+        if (!instance) return HttpServerResponse.text("No AgentBoard instance context", { status: 500 })
+        const app = AgentBoardRoutes({ worktree: instance.worktree })
         const response = yield* Effect.tryPromise(() => Promise.resolve(app.fetch(honoRequest(request))))
         return honoResponse(response)
       }),

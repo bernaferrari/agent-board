@@ -1,7 +1,6 @@
 import { Hono } from "hono"
 import { stream } from "hono/streaming"
 import z from "zod"
-import { Instance } from "@/project/instance"
 import { Beads } from "./beads"
 import { getAgentBoard } from "./board"
 import { AgentBoardEvents } from "./events"
@@ -24,15 +23,17 @@ async function handle<T>(c: { json: (value: unknown, status?: number) => Respons
   }
 }
 
-export function AgentBoardRoutes() {
+export function AgentBoardRoutes(input: { worktree: string }) {
+  const { worktree } = input
+
   async function moveCard(issueID: string, column: AgentBoardColumnID) {
-    const project = AgentBoardStore.upsertProject({ worktree: Instance.worktree })
+    const project = AgentBoardStore.upsertProject({ worktree })
     const latest = AgentBoardStore.latestRunByIssue(project.id).get(issueID)
     if (latest && (latest.status === "queued" || latest.status === "running") && column !== "running") {
       throw new Error("Cancel the active OpenCode run before moving this card.")
     }
     const beadsStatus = beadsStatusForColumn(column)
-    if (beadsStatus) await Beads.updateStatus(Instance.worktree, issueID, beadsStatus)
+    if (beadsStatus) await Beads.updateStatus(worktree, issueID, beadsStatus)
     if (column === "needs_review") {
       const run =
         latest ??
@@ -71,7 +72,7 @@ export function AgentBoardRoutes() {
   return new Hono()
     .get("/projects", async (c) =>
       handle(c, () => {
-        const current = AgentBoardStore.upsertProject({ worktree: Instance.worktree })
+        const current = AgentBoardStore.upsertProject({ worktree })
         return {
           current,
           projects: AgentBoardStore.listProjects(),
@@ -84,7 +85,7 @@ export function AgentBoardRoutes() {
         return AgentBoardStore.upsertProject(body)
       }),
     )
-    .get("/board", async (c) => handle(c, () => getAgentBoard()))
+    .get("/board", async (c) => handle(c, () => getAgentBoard(worktree)))
     .post("/graph/positions", async (c) =>
       handle(c, async () => {
         const body = z
@@ -99,7 +100,7 @@ export function AgentBoardRoutes() {
             ),
           })
           .parse(await c.req.json())
-        const project = AgentBoardStore.upsertProject({ worktree: Instance.worktree })
+        const project = AgentBoardStore.upsertProject({ worktree })
         AgentBoardStore.setGraphPositions(
           project.id,
           body.positions.map((position) => ({
@@ -124,9 +125,9 @@ export function AgentBoardRoutes() {
             runImmediately: z.boolean().optional(),
           })
           .parse(await c.req.json())
-        const project = AgentBoardStore.upsertProject({ worktree: Instance.worktree })
-        const issue = await Beads.create(Instance.worktree, body)
-        const run = body.runImmediately ? await AgentBoardRuns.start(issue.id) : undefined
+        const project = AgentBoardStore.upsertProject({ worktree })
+        const issue = await Beads.create(worktree, body)
+        const run = body.runImmediately ? await AgentBoardRuns.start(worktree, issue.id) : undefined
         AgentBoardEvents.emit({ type: "board.updated", projectID: project.id })
         return {
           issue,
@@ -136,14 +137,14 @@ export function AgentBoardRoutes() {
     )
     .post("/reconcile", async (c) =>
       handle(c, () => {
-        const project = AgentBoardStore.upsertProject({ worktree: Instance.worktree })
+        const project = AgentBoardStore.upsertProject({ worktree })
         return AgentBoardReconciler.reconcile(project.id)
       }),
     )
     .post("/setup/init", async (c) =>
       handle(c, async () => {
-        const result = await Beads.init(Instance.worktree)
-        const project = AgentBoardStore.upsertProject({ worktree: Instance.worktree })
+        const result = await Beads.init(worktree)
+        const project = AgentBoardStore.upsertProject({ worktree })
         AgentBoardEvents.emit({ type: "board.updated", projectID: project.id })
         return {
           ok: true,
@@ -163,11 +164,11 @@ export function AgentBoardRoutes() {
         }
       }),
     )
-    .post("/cards/:issueID/run", async (c) => handle(c, () => AgentBoardRuns.start(c.req.param("issueID"))))
+    .post("/cards/:issueID/run", async (c) => handle(c, () => AgentBoardRuns.start(worktree, c.req.param("issueID"))))
     .post("/runs/start-ready", async (c) =>
       handle(c, async () => {
         const body = z.object({ limit: z.number().optional() }).parse(await c.req.json().catch(() => ({})))
-        return AgentBoardRuns.startReady(body)
+        return AgentBoardRuns.startReady(worktree, body)
       }),
     )
     .post("/cards/:issueID/status", async (c) =>
@@ -180,10 +181,10 @@ export function AgentBoardRoutes() {
           .parse(await c.req.json())
         if (body.column) return moveCard(c.req.param("issueID"), body.column)
         if (!body.status) throw new Error("Missing status or column")
-        await Beads.updateStatus(Instance.worktree, c.req.param("issueID"), body.status)
+        await Beads.updateStatus(worktree, c.req.param("issueID"), body.status)
         AgentBoardEvents.emit({
           type: "board.updated",
-          projectID: AgentBoardStore.upsertProject({ worktree: Instance.worktree }).id,
+          projectID: AgentBoardStore.upsertProject({ worktree }).id,
         })
         return true
       }),

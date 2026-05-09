@@ -1,5 +1,4 @@
 import { AppRuntime } from "@/effect/app-runtime"
-import { Instance } from "@/project/instance"
 import { WithInstance } from "@/project/with-instance"
 import { SessionID } from "@/session/schema"
 import { SessionPrompt } from "@/session/prompt"
@@ -24,6 +23,10 @@ function log(
   data?: unknown,
 ) {
   AgentBoardStore.addRunEvent({ runID, type, message, data })
+}
+
+function runInWorktree<T>(worktree: string, fn: () => Promise<T> | T) {
+  return WithInstance.provide({ directory: worktree, fn })
 }
 
 async function finishRun(runID: string, worktree: string, lease: string, promise: Promise<unknown>) {
@@ -61,8 +64,7 @@ async function finishRun(runID: string, worktree: string, lease: string, promise
 }
 
 export const AgentBoardRuns = {
-  async start(issueID: string) {
-    const worktree = Instance.worktree
+  async start(worktree: string, issueID: string) {
     const project = AgentBoardStore.upsertProject({ worktree })
     const issue = await Beads.show(worktree, issueID)
     const prompt = createAgentBoardPrompt(issue)
@@ -87,8 +89,8 @@ export const AgentBoardRuns = {
     try {
       await Beads.updateStatus(worktree, issueID, "in_progress")
       log(run.id, "beads_status_updated", "Moved Beads issue to in_progress")
-      session = await AppRuntime.runPromise(
-        SessionShare.Service.use((service) => service.create({ title: `${issue.id}: ${issue.title}` })),
+      session = await runInWorktree(worktree, () =>
+        AppRuntime.runPromise(SessionShare.Service.use((service) => service.create({ title: `${issue.id}: ${issue.title}` }))),
       )
     } catch (error) {
       const failed = AgentBoardStore.updateRun(run.id, {
@@ -122,20 +124,21 @@ export const AgentBoardRuns = {
       run.id,
       worktree,
       lease,
-      AppRuntime.runPromise(
-        SessionPrompt.Service.use((service) =>
-          service.prompt({
-            sessionID: session.id,
-            parts: [{ type: "text", text: prompt }],
-          }),
+      runInWorktree(worktree, () =>
+        AppRuntime.runPromise(
+          SessionPrompt.Service.use((service) =>
+            service.prompt({
+              sessionID: session.id,
+              parts: [{ type: "text", text: prompt }],
+            }),
+          ),
         ),
       ),
     )
 
     return AgentBoardStore.getRun(run.id)!
   },
-  async startReady(input?: { limit?: number }) {
-    const worktree = Instance.worktree
+  async startReady(worktree: string, input?: { limit?: number }) {
     const project = AgentBoardStore.upsertProject({ worktree })
     const limit = normalizeStartReadyLimit(input?.limit)
     const ready = await Beads.listReady(worktree)
@@ -152,7 +155,7 @@ export const AgentBoardRuns = {
         continue
       }
       try {
-        const created = await this.start(issue.id)
+        const created = await this.start(worktree, issue.id)
         if (created.status === "failed") {
           failed.push({ issueID: issue.id, error: created.error ?? "Run failed to start" })
         } else {
@@ -168,12 +171,15 @@ export const AgentBoardRuns = {
   async cancel(runID: string) {
     const run = AgentBoardStore.getRun(runID)
     if (!run) throw new Error(`AgentBoard run not found: ${runID}`)
+    const project = AgentBoardStore.getProject(run.projectID)
     if (run.opencodeSessionID) {
-      await AppRuntime.runPromise(
-        SessionPrompt.Service.use((service) => service.cancel(run.opencodeSessionID! as SessionID)),
+      if (!project) throw new Error(`AgentBoard project not found: ${run.projectID}`)
+      await runInWorktree(project.worktree, () =>
+        AppRuntime.runPromise(
+          SessionPrompt.Service.use((service) => service.cancel(run.opencodeSessionID! as SessionID)),
+        ),
       )
     }
-    const project = AgentBoardStore.getProject(run.projectID)
     if (project) {
       await Beads.updateStatus(project.worktree, run.issueID, "open")
       log(runID, "beads_status_updated", "Moved Beads issue back to open")
@@ -197,6 +203,7 @@ export const AgentBoardRuns = {
 
 ${message.trim() || "Please review the current implementation, address any remaining problems, and summarize the result."}`
     const project = AgentBoardStore.getProject(run.projectID)
+    if (!project) throw new Error(`AgentBoard project not found: ${run.projectID}`)
     if (project) {
       await Beads.updateStatus(project.worktree, run.issueID, "in_progress")
       log(runID, "beads_status_updated", "Moved Beads issue back to in_progress")
@@ -213,14 +220,16 @@ ${message.trim() || "Please review the current implementation, address any remai
     emit(updated)
     void finishRun(
       runID,
-      Instance.worktree,
+      project.worktree,
       lease,
-      AppRuntime.runPromise(
-        SessionPrompt.Service.use((service) =>
-          service.prompt({
-            sessionID,
-            parts: [{ type: "text", text: prompt }],
-          }),
+      runInWorktree(project.worktree, () =>
+        AppRuntime.runPromise(
+          SessionPrompt.Service.use((service) =>
+            service.prompt({
+              sessionID,
+              parts: [{ type: "text", text: prompt }],
+            }),
+          ),
         ),
       ),
     )
@@ -242,7 +251,9 @@ ${message.trim() || "Please review the current implementation, address any remai
     const run = AgentBoardStore.getRun(runID)
     if (!run) throw new Error(`AgentBoard run not found: ${runID}`)
     if (!run.opencodeSessionID) throw new Error(`Run ${runID} has no OpenCode session`)
-    await collectRunArtifacts(run)
+    const project = AgentBoardStore.getProject(run.projectID)
+    if (!project) throw new Error(`AgentBoard project not found: ${run.projectID}`)
+    await runInWorktree(project.worktree, () => collectRunArtifacts(run))
     log(runID, "artifacts_collected", "Refreshed session, diff, and review artifacts")
     emit(run)
     return {
