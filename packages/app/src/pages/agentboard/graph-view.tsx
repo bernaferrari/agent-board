@@ -5,6 +5,7 @@ import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "so
 import type { AgentBoardBoard, AgentBoardCard, AgentBoardColumnID, AgentBoardGraphPosition } from "./api"
 import { buildGraphDependencyLayout, getDependencyEdgeNodes } from "./graph-layout"
 import { buildAgentBoardGraph, type AgentBoardGraphNode } from "./graph-state"
+import { COLUMN_ACCENT, issueIDTone, priorityTone, statusLabel, visibleStatus } from "./ui-tokens"
 
 export type AgentBoardViewMode = "board" | "list" | "graph"
 
@@ -55,46 +56,9 @@ type GraphArrow = {
   base: GraphPoint
 }
 
-const COLUMN_ACCENT: Record<AgentBoardColumnID, { dot: string; tint: string; ring: string }> = {
-  blocked: { dot: "bg-[#f85149]", tint: "bg-[#da3633]/14 text-[color-mix(in_oklch,#cf222e_62%,var(--text-strong))]", ring: "ring-[#f85149]/45" },
-  ready: { dot: "bg-[#3fb950]", tint: "bg-[#238636]/14 text-[color-mix(in_oklch,#1a7f37_62%,var(--text-strong))]", ring: "ring-[#3fb950]/45" },
-  running: { dot: "bg-[#d29922]", tint: "bg-[#9e6a03]/14 text-[color-mix(in_oklch,#9a6700_62%,var(--text-strong))]", ring: "ring-[#d29922]/45" },
-  needs_review: { dot: "bg-[#58a6ff]", tint: "bg-[#58a6ff]/14 text-[color-mix(in_oklch,#0969da_62%,var(--text-strong))]", ring: "ring-[#58a6ff]/45" },
-  closed: { dot: "bg-[#8957e5]", tint: "bg-[#8957e5]/14 text-[color-mix(in_oklch,#8250df_62%,var(--text-strong))]", ring: "ring-[#a371f7]/45" },
-}
-
-function priorityTone(priority?: number | string) {
-  const value = typeof priority === "number" ? priority : Number(priority)
-  if (value === 0) return "bg-[#da3633]/14 text-[color-mix(in_oklch,#cf222e_62%,var(--text-strong))] ring-[#f85149]/45"
-  if (value === 1) return "bg-[#bc4c00]/14 text-[color-mix(in_oklch,#bc4c00_62%,var(--text-strong))] ring-[#f0883e]/45"
-  if (value === 2) return "bg-[#9e6a03]/14 text-[color-mix(in_oklch,#9a6700_62%,var(--text-strong))] ring-[#d29922]/45"
-  if (value === 3) return "bg-[#656d76]/12 text-[color-mix(in_oklch,#57606a_62%,var(--text-strong))] ring-[#8c959f]/40"
-  if (value === 4) return "bg-[#656d76]/12 text-[color-mix(in_oklch,#57606a_62%,var(--text-strong))] ring-[#8c959f]/40"
-  return "bg-surface-raised-base text-text-weak ring-border-weaker-base"
-}
-
 function priorityRank(priority?: number | string) {
   const value = typeof priority === "number" ? priority : Number(priority)
   return Number.isFinite(value) ? value : 5
-}
-
-function issueIDTone() {
-  return "rounded bg-surface-raised-base px-1.5 py-0.5 font-mono text-10-semibold text-text-weak ring-1 ring-inset ring-border-weaker-base"
-}
-
-function statusLabel(status?: string) {
-  const value = (status ?? "open").replaceAll("_", " ")
-  return value.charAt(0).toUpperCase() + value.slice(1)
-}
-
-function visibleStatus(card: AgentBoardCard) {
-  const run = card.latestRun
-  if (run && run.status !== "cancelled") return run.status
-  if (card.issue.status) return card.issue.status
-  if (card.column === "ready") return "open"
-  if (card.column === "running") return "in_progress"
-  if (card.column === "closed") return "closed"
-  return card.column
 }
 
 function dependencyLabel(node: AgentBoardGraphNode) {
@@ -785,7 +749,7 @@ function GraphNodeCard(props: {
         <span
           class={`inline-flex min-w-0 max-w-[8.5rem] items-center rounded-full px-1.5 py-0.5 text-10-semibold ring-1 ring-inset ${accent().tint} ${accent().ring}`}
         >
-          <span class="truncate">{statusLabel(status())}</span>
+          <span class="truncate">{statusLabel(status(), { capitalize: true })}</span>
         </span>
         <Show when={card().issue.priority !== undefined}>
           <span
