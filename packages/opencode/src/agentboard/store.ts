@@ -10,6 +10,9 @@ import type {
   AgentBoardRunStatus,
 } from "./types"
 
+type DbClient = Parameters<typeof Database.use>[0] extends (db: infer T) => unknown ? T : never
+type DbQuery = Parameters<DbClient["get"]>[0]
+
 type ProjectRow = {
   id: string
   worktree: string
@@ -76,7 +79,7 @@ let ready = false
 
 function ensure() {
   if (ready) return
-  Database.use((db: any) => {
+  Database.use((db: DbClient) => {
     db.run(sql`
       CREATE TABLE IF NOT EXISTS agentboard_project (
         id TEXT PRIMARY KEY,
@@ -237,13 +240,24 @@ function hasOwn<T extends object, K extends PropertyKey>(input: T, key: K): inpu
   return Object.prototype.hasOwnProperty.call(input, key)
 }
 
+function dbGet<T>(db: DbClient, query: DbQuery) {
+  return db.get(query) as T | undefined
+}
+
+function dbAll<T>(db: DbClient, query: DbQuery) {
+  return db.all(query) as T[]
+}
+
 export const AgentBoardStore = {
   ensure,
   upsertProject(input: { worktree: string; bdDbPath?: string }) {
     ensure()
     const now = Date.now()
-    return Database.use((db: any) => {
-      const existing = db.get(sql<ProjectRow>`SELECT * FROM agentboard_project WHERE worktree = ${input.worktree}`)
+    return Database.use((db: DbClient) => {
+      const existing = dbGet<ProjectRow>(
+        db,
+        sql<ProjectRow>`SELECT * FROM agentboard_project WHERE worktree = ${input.worktree}`,
+      )
       if (existing) {
         db.run(sql`
           UPDATE agentboard_project
@@ -274,14 +288,16 @@ export const AgentBoardStore = {
   },
   listProjects() {
     ensure()
-    return Database.use((db: any) =>
-      db.all(sql<ProjectRow>`SELECT * FROM agentboard_project ORDER BY time_updated DESC`).map(projectFromRow),
+    return Database.use((db: DbClient) =>
+      dbAll<ProjectRow>(db, sql<ProjectRow>`SELECT * FROM agentboard_project ORDER BY time_updated DESC`).map(
+        projectFromRow,
+      ),
     )
   },
   getProject(projectID: string) {
     ensure()
-    return Database.use((db: any) => {
-      const row = db.get(sql<ProjectRow>`SELECT * FROM agentboard_project WHERE id = ${projectID}`)
+    return Database.use((db: DbClient) => {
+      const row = dbGet<ProjectRow>(db, sql<ProjectRow>`SELECT * FROM agentboard_project WHERE id = ${projectID}`)
       return row ? projectFromRow(row) : undefined
     })
   },
@@ -289,7 +305,7 @@ export const AgentBoardStore = {
     ensure()
     const now = Date.now()
     const id = `abr_${randomUUID()}`
-    Database.use((db: any) => {
+    Database.use((db: DbClient) => {
       db.run(sql`
         INSERT INTO agentboard_run
           (id, project_id, issue_id, opencode_session_id, status, prompt, agent, model, error, time_started, time_ended, time_created, time_updated)
@@ -326,7 +342,7 @@ export const AgentBoardStore = {
       started: hasOwn(patch, "started") ? patch.started : current.time.started,
       ended: hasOwn(patch, "ended") ? patch.ended : current.time.ended,
     }
-    Database.use((db: any) =>
+    Database.use((db: DbClient) =>
       db.run(sql`
         UPDATE agentboard_run
         SET status = ${next.status},
@@ -345,27 +361,32 @@ export const AgentBoardStore = {
   },
   getRun(runID: string) {
     ensure()
-    return Database.use((db: any) => {
-      const row = db.get(sql<RunRow>`SELECT * FROM agentboard_run WHERE id = ${runID}`)
+    return Database.use((db: DbClient) => {
+      const row = dbGet<RunRow>(db, sql<RunRow>`SELECT * FROM agentboard_run WHERE id = ${runID}`)
       return row ? runFromRow(row) : undefined
     })
   },
   listRuns(projectID: string) {
     ensure()
-    return Database.use((db: any) =>
-      db
-        .all(sql<RunRow>`SELECT * FROM agentboard_run WHERE project_id = ${projectID} ORDER BY time_created DESC`)
-        .map(runFromRow),
+    return Database.use((db: DbClient) =>
+      dbAll<RunRow>(
+        db,
+        sql<RunRow>`SELECT * FROM agentboard_run WHERE project_id = ${projectID} ORDER BY time_created DESC`,
+      ).map(runFromRow),
     )
   },
   listActiveRuns(projectID?: string) {
     ensure()
-    return Database.use((db: any) => {
+    return Database.use((db: DbClient) => {
       const rows = projectID
-        ? db.all(
+        ? dbAll<RunRow>(
+            db,
             sql<RunRow>`SELECT * FROM agentboard_run WHERE project_id = ${projectID} AND status IN ('queued', 'running') ORDER BY time_created ASC`,
           )
-        : db.all(sql<RunRow>`SELECT * FROM agentboard_run WHERE status IN ('queued', 'running') ORDER BY time_created ASC`)
+        : dbAll<RunRow>(
+            db,
+            sql<RunRow>`SELECT * FROM agentboard_run WHERE status IN ('queued', 'running') ORDER BY time_created ASC`,
+          )
       return rows.map(runFromRow)
     })
   },
@@ -378,15 +399,16 @@ export const AgentBoardStore = {
   },
   listArtifacts(runID: string) {
     ensure()
-    return Database.use((db: any) =>
-      db
-        .all(sql<ArtifactRow>`SELECT * FROM agentboard_artifact WHERE run_id = ${runID} ORDER BY time_created DESC`)
-        .map(artifactFromRow),
+    return Database.use((db: DbClient) =>
+      dbAll<ArtifactRow>(
+        db,
+        sql<ArtifactRow>`SELECT * FROM agentboard_artifact WHERE run_id = ${runID} ORDER BY time_created DESC`,
+      ).map(artifactFromRow),
     )
   },
   deleteArtifacts(runID: string, kinds?: AgentBoardArtifactKind[]) {
     ensure()
-    Database.use((db: any) => {
+    Database.use((db: DbClient) => {
       if (!kinds?.length) {
         db.run(sql`DELETE FROM agentboard_artifact WHERE run_id = ${runID}`)
         return
@@ -407,7 +429,7 @@ export const AgentBoardStore = {
     ensure()
     const id = `aba_${randomUUID()}`
     const now = Date.now()
-    Database.use((db: any) =>
+    Database.use((db: DbClient) =>
       db.run(sql`
         INSERT INTO agentboard_artifact (id, run_id, kind, title, url, path, data_json, time_created)
         VALUES (${id}, ${input.runID}, ${input.kind}, ${input.title}, ${input.url ?? null}, ${input.path ?? null}, ${
@@ -421,7 +443,7 @@ export const AgentBoardStore = {
     ensure()
     const id = `abe_${randomUUID()}`
     const now = Date.now()
-    Database.use((db: any) =>
+    Database.use((db: DbClient) =>
       db.run(sql`
         INSERT INTO agentboard_run_event (id, run_id, type, message, data_json, time_created)
         VALUES (${id}, ${input.runID}, ${input.type}, ${input.message}, ${
@@ -433,18 +455,22 @@ export const AgentBoardStore = {
   },
   listRunEvents(runID: string) {
     ensure()
-    return Database.use((db: any) =>
-      db
-        .all(sql<EventRow>`SELECT * FROM agentboard_run_event WHERE run_id = ${runID} ORDER BY time_created ASC`)
-        .map(eventFromRow),
+    return Database.use((db: DbClient) =>
+      dbAll<EventRow>(
+        db,
+        sql<EventRow>`SELECT * FROM agentboard_run_event WHERE run_id = ${runID} ORDER BY time_created ASC`,
+      ).map(eventFromRow),
     )
   },
   acquireLease(input: { resource: string; owner: string; ttlMs?: number }) {
     ensure()
     const now = Date.now()
     const expires = now + (input.ttlMs ?? 1000 * 60 * 60 * 8)
-    return Database.use((db: any) => {
-      const existing = db.get(sql<LeaseRow>`SELECT * FROM agentboard_lease WHERE resource = ${input.resource}`)
+    return Database.use((db: DbClient) => {
+      const existing = dbGet<LeaseRow>(
+        db,
+        sql<LeaseRow>`SELECT * FROM agentboard_lease WHERE resource = ${input.resource}`,
+      )
       if (existing && existing.expires_at > now && existing.owner !== input.owner) {
         return false
       }
@@ -458,22 +484,23 @@ export const AgentBoardStore = {
   },
   releaseLease(input: { resource: string; owner: string }) {
     ensure()
-    Database.use((db: any) =>
+    Database.use((db: DbClient) =>
       db.run(sql`DELETE FROM agentboard_lease WHERE resource = ${input.resource} AND owner = ${input.owner}`),
     )
   },
   listGraphPositions(projectID: string) {
     ensure()
-    return Database.use((db: any) =>
-      db
-        .all(sql<GraphPositionRow>`SELECT * FROM agentboard_graph_position WHERE project_id = ${projectID}`)
-        .map(graphPositionFromRow),
+    return Database.use((db: DbClient) =>
+      dbAll<GraphPositionRow>(
+        db,
+        sql<GraphPositionRow>`SELECT * FROM agentboard_graph_position WHERE project_id = ${projectID}`,
+      ).map(graphPositionFromRow),
     )
   },
   setGraphPositions(projectID: string, positions: AgentBoardGraphPosition[]) {
     ensure()
     const now = Date.now()
-    Database.use((db: any) => {
+    Database.use((db: DbClient) => {
       for (const position of positions) {
         if (!position.issueID || !Number.isFinite(position.x) || !Number.isFinite(position.y)) continue
         db.run(sql`

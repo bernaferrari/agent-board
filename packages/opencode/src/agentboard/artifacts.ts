@@ -14,19 +14,40 @@ type SnapshotDiff = {
   status?: string
 }
 
+type SessionMessageLike = {
+  info: { role: string; time?: { created?: number } }
+  parts?: unknown[]
+}
+
+type TextPartLike = {
+  type: string
+  text: string
+}
+
+function objectRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : undefined
+}
+
+function isAssistantMessage(value: unknown): value is SessionMessageLike {
+  const message = objectRecord(value)
+  const info = objectRecord(message?.info)
+  return info?.role === "assistant"
+}
+
+function isTextPart(value: unknown): value is TextPartLike {
+  const part = objectRecord(value)
+  return part?.type === "text" && typeof part.text === "string"
+}
+
 function latestAssistantText(messages: unknown[]) {
   const assistantMessages = messages
-    .filter((message): message is { info: { role: string; time?: { created?: number } }; parts?: unknown[] } => {
-      return typeof message === "object" && message !== null && (message as any).info?.role === "assistant"
-    })
+    .filter(isAssistantMessage)
     .sort((a, b) => (a.info.time?.created ?? 0) - (b.info.time?.created ?? 0))
 
   const latest = assistantMessages.at(-1)
   if (!latest) return
   const text = (latest.parts ?? [])
-    .filter((part): part is { type: string; text: string } => {
-      return typeof part === "object" && part !== null && (part as any).type === "text" && typeof (part as any).text === "string"
-    })
+    .filter(isTextPart)
     .map((part) => part.text.trim())
     .filter(Boolean)
     .join("\n\n")
