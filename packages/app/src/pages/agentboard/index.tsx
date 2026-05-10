@@ -1271,11 +1271,16 @@ export default function AgentBoardPage() {
                 >
                   <GraphMode
                     board={filteredBoard() ?? current()}
+                    unfilteredBoard={current()}
                     query={query()}
                     selectedID={selectedID()}
                     busy={busy()}
                     onSelect={selectCard}
                     onChat={openIssueChat}
+                    onClearWorkFilters={() => {
+                      setActiveEpicID(undefined)
+                      setActiveIssueType(undefined)
+                    }}
                     onSavePositions={(positions) => {
                       void client()
                         .saveGraphPositions(positions)

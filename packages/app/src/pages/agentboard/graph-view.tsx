@@ -788,16 +788,17 @@ function GraphNodeCard(props: {
 
 export function GraphMode(props: {
   board: AgentBoardBoard
+  unfilteredBoard?: AgentBoardBoard
   query: string
   selectedID?: string
   busy?: string
   onSelect: (issueID: string) => void
   onChat: (issueID: string) => void
   onSavePositions: (positions: AgentBoardGraphPosition[]) => void
+  onClearWorkFilters?: () => void
 }) {
   const [viewport, setViewport] = createSignal({ x: 40, y: 40, scale: 1 })
   const [filter, setFilter] = createSignal<GraphFilter>("open")
-  const [hideClosed, setHideClosed] = createSignal(true)
   const [dependencyLayers, setDependencyLayers] = createSignal<Record<string, number>>({})
   const [hoveredID, setHoveredID] = createSignal<string>()
   const [autoPositions, setAutoPositions] = createSignal<Record<string, AgentBoardGraphPosition>>({})
@@ -849,7 +850,6 @@ export function GraphMode(props: {
     const current = graph()
     const count = (value: GraphFilter) =>
       current.nodes.filter((node) => {
-        if (hideClosed() && node.card.column === "closed") return false
         if (value === "critical") return node.critical
         if (value === "open") return node.card.column !== "closed"
         return true
@@ -861,29 +861,9 @@ export function GraphMode(props: {
       closed: current.nodes.filter((node) => node.card.column === "closed").length,
     }
   })
-  const emptyHint = createMemo(() => {
-    const current = graph()
-    const withoutSearch = buildAgentBoardGraph(props.board, "")
-    if (withoutSearch.nodes.length === 0) return undefined
-    const hints: string[] = []
-    const query = props.query.trim()
-    const queryMatchesNothing = query && withoutSearch.nodes.length > current.nodes.length
-    const filterMatchesNothing =
-      (filter() !== "all" || hideClosed()) &&
-      current.nodes.some((node) => {
-        if (node.card.column === "closed") return true
-        if (filter() === "critical") return !node.critical
-        return false
-      })
-    if (queryMatchesNothing) hints.push("clear search")
-    if (filterMatchesNothing) hints.push("switch filters")
-    if (hints.length === 0) return undefined
-    return `${hints.join(" or ")}.`
-  })
   const visibleGraphInput = createMemo(() => {
     const current = graph()
     const rawNodes = current.nodes.filter((node) => {
-      if (hideClosed() && node.card.column === "closed") return false
       if (filter() === "critical") return node.critical
       if (filter() === "open") return node.card.column !== "closed"
       return true
@@ -893,7 +873,6 @@ export function GraphMode(props: {
     const layoutEdges = reduceTransitiveGraphEdges(edges)
     const signature = [
       filter(),
-      hideClosed() ? "closed:hidden" : "closed:visible",
       rawNodes
         .map((node) => node.id)
         .sort()
@@ -904,6 +883,32 @@ export function GraphMode(props: {
         .join(","),
     ].join("|")
     return { current, rawNodes, edges, layoutEdges, signature }
+  })
+  const emptyHint = createMemo(() => {
+    if (visibleGraphInput().rawNodes.length > 0) return undefined
+    const withoutSearch = buildAgentBoardGraph(props.unfilteredBoard ?? props.board, "")
+    if (withoutSearch.nodes.length === 0) return undefined
+    if (props.query.trim()) return "Clear search to see matching issues."
+    return undefined
+  })
+  const filterEmptyAction = createMemo<{
+    before: string
+    label: string
+    after: string
+    onClick: () => void
+  } | undefined>(() => {
+    if (visibleGraphInput().rawNodes.length > 0 || props.query.trim()) return undefined
+    const withoutSearch = buildAgentBoardGraph(props.unfilteredBoard ?? props.board, "")
+    if (withoutSearch.nodes.length === 0) return undefined
+    if (filter() === "critical" || filter() === "open") {
+      return {
+        before: "Click",
+        label: "All",
+        after: "to see more issues.",
+        onClick: () => selectFilter("all"),
+      }
+    }
+    return undefined
   })
   const visibleGraph = createMemo(() => {
     const input = visibleGraphInput()
@@ -1144,6 +1149,9 @@ export function GraphMode(props: {
   }
 
   function selectFilter(value: GraphFilter) {
+    if (value === "all") {
+      props.onClearWorkFilters?.()
+    }
     setFilter(value)
     requestAnimationFrame(() => requestAnimationFrame(fitGraph))
   }
@@ -1294,28 +1302,6 @@ export function GraphMode(props: {
               }}
             </For>
           </div>
-          <Tooltip placement="top" value={hideClosed() ? "Show closed issues" : "Hide closed issues"}>
-            <button
-              type="button"
-              class="hidden h-7 items-center gap-1.5 rounded-md px-2 text-11-semibold transition-colors hover:bg-surface-raised-base lg:inline-flex"
-              classList={{
-                "text-text-strong": !hideClosed(),
-                "text-text-weak hover:text-text-base": hideClosed(),
-              }}
-              onClick={() => {
-                setHideClosed(!hideClosed())
-                requestAnimationFrame(() => requestAnimationFrame(fitGraph))
-              }}
-              aria-pressed={!hideClosed()}
-            >
-              <Icon name={hideClosed() ? "eye-off" : "eye"} class="size-3.5" />
-              <span>Closed</span>
-              <span class="font-mono text-10-regular tabular-nums opacity-60">
-                {graphFilterCounts().closed}
-              </span>
-            </button>
-          </Tooltip>
-          <span class="hidden h-4 w-px bg-border-weaker-base lg:block" aria-hidden="true" />
           <Tooltip placement="top" value="Auto-arrange graph">
             <IconButton
               icon="file-tree"
@@ -1430,7 +1416,23 @@ export function GraphMode(props: {
               <div class="mx-auto mb-3 flex size-10 items-center justify-center rounded-lg bg-surface-raised-base shadow-xs-border-base">
                 <Icon name="branch" class="size-4 text-text-weak" />
               </div>
-              <h3 class="text-14-semibold text-text-strong">No graph nodes match this view.</h3>
+              <h3 class="text-14-semibold text-text-strong">No Issues to Show</h3>
+              <Show when={filterEmptyAction()}>
+                {(action) => (
+                  <button
+                    type="button"
+                    class="mt-1 text-12-regular text-text-weak hover:text-text-base"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={action().onClick}
+                  >
+                    {action().before}{" "}
+                    <span class="rounded-sm bg-surface-raised-base px-1 py-0.5 text-text-strong shadow-xs-border-base">
+                      {action().label}
+                    </span>{" "}
+                    {action().after}
+                  </button>
+                )}
+              </Show>
               <Show when={emptyHint()}>
                 {(hint) => <p class="mt-1 text-12-regular text-text-weak">{hint()}</p>}
               </Show>

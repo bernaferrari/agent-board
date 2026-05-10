@@ -10,7 +10,6 @@ function agentBoardApp(worktree: string) {
 }
 
 function honoRequest(request: HttpServerRequest.HttpServerRequest) {
-  if (request.source instanceof Request) return request.source
   const init: RequestInit & { duplex?: "half" } = {
     method: request.method,
     headers: request.headers,
