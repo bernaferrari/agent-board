@@ -1049,8 +1049,8 @@ export function GraphMode(props: {
           layers,
           edgeOffset,
         ),
-        tone: active ? "text-border-strong-base" : edge.critical ? "text-border-strong-base" : "text-border-weaker-base",
-        opacity: active ? 1 : muted ? 0.28 : id !== undefined ? 0.66 : 0.92,
+        tone: active ? "text-border-strong-base" : edge.critical ? "text-border-strong-base" : "text-border-base",
+        opacity: active ? 1 : muted ? 0.34 : id !== undefined ? 0.72 : 0.94,
       }
     }).sort((a, b) => a.paintOrder - b.paintOrder || a.sourceOrder - b.sourceOrder)
   })
@@ -1156,6 +1156,65 @@ export function GraphMode(props: {
     requestAnimationFrame(() => requestAnimationFrame(fitGraph))
   }
 
+  const graphScopeControls = () => (
+    <div class="flex h-[28px] items-center overflow-hidden rounded-lg border border-border-weaker-base bg-background-base/92 shadow-lg backdrop-blur">
+      <div class="flex h-full overflow-hidden">
+        <For
+          each={
+            [
+              ["open", "Open"],
+              ["critical", "Critical"],
+              ["all", "All"],
+            ] as const
+          }
+        >
+          {(value) => {
+            const count = () => graphFilterCounts()[value[0]]
+            const isActive = () => filter() === value[0]
+            const showCriticalDot = () => value[0] === "critical" && count() > 0
+            return (
+              <button
+                type="button"
+                class="inline-flex h-full items-center gap-1.5 border-r border-border-weak-base px-2 text-11-semibold transition-colors"
+                classList={{
+                  "bg-surface-raised-base-active text-text-strong": isActive(),
+                  "text-text-weak hover:bg-surface-raised-base-hover hover:text-text-base": !isActive(),
+                }}
+                onClick={() => selectFilter(value[0])}
+              >
+                <Show when={showCriticalDot()}>
+                  <span
+                    class="size-1.5 rounded-full bg-[#f85149]"
+                    classList={{ "opacity-100": isActive(), "opacity-70": !isActive() }}
+                  />
+                </Show>
+                <span>{value[1]}</span>
+                <span
+                  class="font-mono text-10-regular tabular-nums"
+                  classList={{
+                    "text-text-strong": isActive(),
+                    "text-text-weak": !isActive(),
+                  }}
+                >
+                  {count()}
+                </span>
+              </button>
+            )
+          }}
+        </For>
+      </div>
+      <Tooltip placement="top" value="Auto-arrange graph">
+        <IconButton
+          icon="file-tree"
+          variant="ghost"
+          size="small"
+          onClick={arrangeGraph}
+          aria-label="Auto-arrange graph"
+        />
+      </Tooltip>
+    </div>
+  )
+
   function onPointerMove(event: PointerEvent) {
     if (!pointer) return
     event.preventDefault()
@@ -1255,65 +1314,6 @@ export function GraphMode(props: {
 
   return (
     <div class="relative flex h-full min-h-0 flex-col overflow-hidden bg-background-base">
-      <div class="flex h-12 shrink-0 items-center justify-end gap-3 border-b border-border-weaker-base bg-background-base/95 px-4">
-        <div class="flex shrink-0 items-center gap-2">
-          <div class="hidden h-[24px] items-center overflow-hidden rounded-md border border-border-weak-base bg-surface-panel md:flex">
-            <For
-              each={
-                [
-                  ["open", "Open"],
-                  ["critical", "Risk"],
-                  ["all", "All"],
-                ] as const
-              }
-            >
-              {(value) => {
-                const count = () => graphFilterCounts()[value[0]]
-                const isActive = () => filter() === value[0]
-                const showRiskDot = () => value[0] === "critical" && count() > 0
-                return (
-                  <button
-                    type="button"
-                    class="inline-flex h-full items-center gap-1.5 border-r border-border-weak-base px-2 text-11-semibold transition-colors last:border-r-0"
-                    classList={{
-                      "bg-surface-raised-base-active text-text-strong": isActive(),
-                      "text-text-weak hover:bg-surface-raised-base-hover hover:text-text-base": !isActive(),
-                    }}
-                    onClick={() => selectFilter(value[0])}
-                  >
-                    <Show when={showRiskDot()}>
-                      <span
-                        class="size-1.5 rounded-full bg-[#f85149]"
-                        classList={{ "opacity-100": isActive(), "opacity-70": !isActive() }}
-                      />
-                    </Show>
-                    <span>{value[1]}</span>
-                    <span
-                      class="font-mono text-10-regular tabular-nums"
-                      classList={{
-                        "text-text-strong": isActive(),
-                        "text-text-weak": !isActive(),
-                      }}
-                    >
-                      {count()}
-                    </span>
-                  </button>
-                )
-              }}
-            </For>
-          </div>
-          <Tooltip placement="top" value="Auto-arrange graph">
-            <IconButton
-              icon="file-tree"
-              variant="ghost"
-              size="normal"
-              onClick={arrangeGraph}
-              aria-label="Auto-arrange graph"
-            />
-          </Tooltip>
-        </div>
-      </div>
-
       <div
         ref={setRootElement}
         class="relative min-h-0 flex-1 cursor-grab overflow-hidden bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.055)_1px,transparent_0)] bg-[length:28px_28px] active:cursor-grabbing"
@@ -1328,6 +1328,7 @@ export function GraphMode(props: {
           })
         }}
       >
+        <div class="absolute right-4 top-4 z-30 hidden md:block">{graphScopeControls()}</div>
         <div
           class="absolute left-0 top-0 origin-top-left will-change-transform"
           style={{

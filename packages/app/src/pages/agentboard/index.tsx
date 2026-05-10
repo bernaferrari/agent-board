@@ -139,6 +139,7 @@ export default function AgentBoardPage() {
   const [drawerTab, setDrawerTab] = createSignal<DrawerTab>("details")
   const [drawerID, setDrawerID] = createSignal<string>()
   const [drawerOpen, setDrawerOpen] = createSignal(false)
+  const [titlebarLeftMount, setTitlebarLeftMount] = createSignal<HTMLElement | null>(null)
   const [titlebarCenterMount, setTitlebarCenterMount] = createSignal<HTMLElement | null>(null)
   const [titlebarRightMount, setTitlebarRightMount] = createSignal<HTMLElement | null>(null)
   const [notifyEnabled, setNotifyEnabled] = createSignal(false)
@@ -919,6 +920,7 @@ export default function AgentBoardPage() {
   }
 
   onMount(() => {
+    setTitlebarLeftMount(document.getElementById("opencode-titlebar-left"))
     setTitlebarCenterMount(document.getElementById("opencode-titlebar-center"))
     setTitlebarRightMount(document.getElementById("opencode-titlebar-right"))
     if (typeof Notification !== "undefined") {
@@ -985,6 +987,22 @@ export default function AgentBoardPage() {
 
   return (
     <>
+      <Show when={titlebarLeftMount()}>
+        {(mount) => (
+          <Portal mount={mount()}>
+            <Tooltip placement="top" value="Refresh AgentBoard">
+              <Button
+                variant="ghost"
+                icon="reset"
+                class="titlebar-icon h-6 w-8 p-0"
+                onClick={() => void load()}
+                disabled={loading()}
+                aria-label="Refresh AgentBoard"
+              />
+            </Tooltip>
+          </Portal>
+        )}
+      </Show>
       <Show when={titlebarCenterMount()}>
         {(mount) => (
           <Portal mount={mount()}>
@@ -1018,17 +1036,6 @@ export default function AgentBoardPage() {
                   }}
                 />
               </Show>
-              <Tooltip placement="top" value="Refresh AgentBoard">
-                <Button
-                  variant="ghost"
-                  icon="reset"
-                  class="titlebar-icon h-6 w-8 p-0"
-                  onClick={() => void load()}
-                  disabled={loading()}
-                  aria-label="Refresh AgentBoard"
-                >
-                </Button>
-              </Tooltip>
               <HelpMenu />
               {modeSwitch()}
             </div>
@@ -1047,6 +1054,13 @@ export default function AgentBoardPage() {
               <div class="flex min-w-0 items-center gap-2">
                 <h1 class="text-14-semibold text-text-strong">AgentBoard</h1>
               </div>
+              <Show when={!titlebarLeftMount()}>
+                <Tooltip placement="top" value="Refresh AgentBoard">
+                  <Button variant="secondary" size="small" icon="reset" onClick={() => void load()} disabled={loading()}>
+                    Refresh
+                  </Button>
+                </Tooltip>
+              </Show>
             </div>
 
             <div class="flex shrink-0 items-center gap-2">
@@ -1076,11 +1090,6 @@ export default function AgentBoardPage() {
                     }}
                   />
                 </Show>
-                <Tooltip placement="top" value="Refresh AgentBoard">
-                  <Button variant="secondary" size="small" icon="reset" onClick={() => void load()} disabled={loading()}>
-                    Refresh
-                  </Button>
-                </Tooltip>
                 <HelpMenu />
                 {modeSwitch()}
               </Show>
