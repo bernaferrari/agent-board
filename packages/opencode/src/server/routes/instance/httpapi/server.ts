@@ -81,6 +81,7 @@ import {
 } from "./middleware/authorization"
 import { EventApi } from "./groups/event"
 import { PtyConnectApi } from "./groups/pty"
+import { agentBoardRoute } from "./handlers/agentboard"
 import { eventHandlers } from "./handlers/event"
 import { configHandlers } from "./handlers/config"
 import { controlHandlers } from "./handlers/control"
@@ -171,7 +172,15 @@ const instanceApiRoutes = HttpApiBuilder.layer(InstanceHttpApi).pipe(
   ]),
 )
 
-const instanceRoutes = instanceApiRoutes.pipe(
+const rawInstanceRoutes = agentBoardRoute.pipe(
+  Layer.provide([
+    httpApiAuthLayer,
+    workspaceRoutingLive,
+    instanceContextLayer,
+    schemaErrorLayer,
+  ]),
+)
+const instanceRoutes = Layer.mergeAll(rawInstanceRoutes, instanceApiRoutes).pipe(
   Layer.provide([httpApiAuthLayer, workspaceRoutingLive, instanceContextLayer, schemaErrorLayer]),
 )
 const serverRoutes = HttpApiBuilder.layer(Api).pipe(

@@ -1247,12 +1247,18 @@ export default function LegacyLayout(props: ParentProps) {
       return
     }
 
-    navigateWithSidebarReset(`/${base64Encode(root)}/session`)
+    navigateWithSidebarReset(`/${base64Encode(root)}/board`)
   }
 
   function navigateToSession(session: Session | undefined) {
     if (!session) return
     navigateWithSidebarReset(`/${base64Encode(session.directory)}/session/${session.id}`)
+  }
+
+  function navigateToBoard(directory: string | undefined) {
+    if (!directory) return
+    server.projects.touch(projectRoot(directory))
+    navigateWithSidebarReset(`/${base64Encode(directory)}/board`)
   }
 
   function openProject(directory: string, navigate = true) {
@@ -2245,6 +2251,8 @@ export default function LegacyLayout(props: ParentProps) {
       openProjectKeybind={() => command.keybind("project.open")}
       onOpenProject={chooseProject}
       renderProjectOverlay={projectOverlay}
+      agentBoardLabel={() => language.t("sidebar.agentBoard")}
+      onOpenAgentBoard={() => navigateToBoard(currentProject()?.worktree ?? layout.projects.list()[0]?.worktree)}
       settingsLabel={() => language.t("sidebar.settings")}
       settingsKeybind={() => command.keybind("settings.open")}
       onOpenSettings={openSettings}

@@ -4,6 +4,8 @@ import { ServerConnection, useServer } from "@/context/server"
 import { useServerSync } from "@/context/server-sync"
 import { useTabs } from "@/context/tabs"
 import { toggleHomeProjectSelection } from "@/pages/layout/helpers"
+import { base64Encode } from "@opencode-ai/core/util/encode"
+import { useNavigate } from "@solidjs/router"
 import { createEffect, createMemo } from "solid-js"
 
 export function createHomeController() {
@@ -12,6 +14,7 @@ export function createHomeController() {
   const server = useServer()
   const global = useGlobal()
   const tabs = useTabs()
+  const navigate = useNavigate()
   const selection = layout.home.selection
   const focusedServer = createMemo(
     () => global.servers.list().find((conn) => ServerConnection.key(conn) === selection().server) ?? server.current,
@@ -99,6 +102,13 @@ export function createHomeController() {
         const project = newSessionProject()
         if (!conn || !project) return
         openProjectNewSession(conn, project.worktree)
+      },
+      openAgentBoard: () => {
+        const conn = focusedServer()
+        const project = newSessionProject()
+        if (!conn || !project) return
+        global.ensureServerCtx(conn).projects.touch(project.worktree)
+        navigate(`/${base64Encode(project.worktree)}/board`)
       },
       openProjectNewSession,
     },

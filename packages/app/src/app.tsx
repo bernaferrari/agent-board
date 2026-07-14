@@ -70,7 +70,9 @@ import { SessionPage, SessionRouteErrorBoundary, TargetSessionRouteContent } fro
 import { NewHome } from "@/pages/home"
 import { LegacyHome } from "@/pages/home/legacy-home"
 
+const AgentBoardRoute = lazy(() => import("@/pages/agentboard"))
 const NewSession = lazy(() => import("@/pages/new-session"))
+const SessionIndexRoute = () => <Navigate href="board" />
 
 const SessionRoute = () => {
   const settings = useSettings()
@@ -356,9 +358,22 @@ function ServerScopedProviders(props: ServerScopedShellProps) {
 }
 
 function LegacyServerScopedShell(props: ServerScopedShellProps) {
+  const settings = useSettings()
   return (
     <ServerScopedProviders directory={props.directory} serverScoped={props.serverScoped}>
-      <LegacyLayout>{props.children}</LegacyLayout>
+      {/*
+        When new layout designs are on, the router root already wraps routes in
+        NewLayout (titlebar + content). Nesting LegacyLayout here double-renders
+        the titlebar and pinches AgentBoard into the classic sidebar column.
+      */}
+      <Show
+        when={settings.general.newLayoutDesigns()}
+        fallback={<LegacyLayout>{props.children}</LegacyLayout>}
+      >
+        <div class="size-full min-h-0 min-w-0 w-full self-stretch flex flex-col overflow-hidden">
+          {props.children}
+        </div>
+      </Show>
     </ServerScopedProviders>
   )
 }
@@ -623,7 +638,8 @@ function Routes(props: { serverScoped?: JSX.Element }) {
           }
         </Show>
         <Route path="/:dir" component={DirectoryLayout}>
-          <Route path="/" component={() => <Navigate href="session" />} />
+          <Route path="/" component={SessionIndexRoute} />
+          <Route path="/board" component={AgentBoardRoute} />
           <Route path="/session/:id?" component={SessionRoute} />
         </Route>
       </Route>
