@@ -19,7 +19,7 @@ import { type LocalProject } from "@/context/layout"
 import { useServerSync, useQueryOptions } from "@/context/server-sync"
 import { useLanguage } from "@/context/language"
 import { pathKey } from "@/utils/path-key"
-import { NewSessionItem, SessionItem, SessionSkeleton } from "./sidebar-items"
+import { AgentBoardItem, NewSessionItem, SessionItem, SessionSkeleton } from "./sidebar-items"
 import { sortedRootSessions } from "./helpers"
 import { useIsFetching } from "@tanstack/solid-query"
 
@@ -248,6 +248,12 @@ const WorkspaceSessionList = (props: {
   language: ReturnType<typeof useLanguage>
 }): JSX.Element => (
   <nav class="flex flex-col gap-1">
+    <AgentBoardItem
+      slug={props.slug()}
+      mobile={props.mobile}
+      sidebarExpanded={props.ctx.sidebarExpanded}
+      clearHoverProjectSoon={props.ctx.clearHoverProjectSoon}
+    />
     <Show when={props.showNew()}>
       <NewSessionItem
         slug={props.slug()}

@@ -25,6 +25,10 @@
 }
 
 @layer components {
+  [data-slot="agentboard-column-scroll"] > .scroll-view__thumb {
+    right: 2px;
+  }
+
   [data-component="getting-started"] {
     container-type: inline-size;
     container-name: getting-started;

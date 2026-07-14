@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+base_remote="${BASE_REMOTE:-upstream}"
+base_branch="${BASE_BRANCH:-dev}"
+base_ref="${base_remote}/${base_branch}"
+
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "error: not inside a git worktree" >&2
+  exit 1
+fi
+
+current_branch="$(git branch --show-current)"
+if [[ -z "${current_branch}" ]]; then
+  echo "error: not on a branch" >&2
+  exit 1
+fi
+
+safe_branch="${current_branch//\//-}"
+timestamp="$(date +%Y%m%d-%H%M%S)"
+backup_branch="backup/${safe_branch}-${timestamp}"
+stash_ref=""
+stash_message="rebase-upstream-dev:${current_branch}:${timestamp}"
+
+restore_original_state() {
+  local reason="$1"
+  echo
+  echo "Reverting to ${backup_branch} because: ${reason}" >&2
+
+  git rebase --abort >/dev/null 2>&1 || true
+  git reset --hard "${backup_branch}"
+
+  if [[ -n "${stash_ref}" ]]; then
+    if git stash apply --index "${stash_ref}"; then
+      git stash drop "${stash_ref}" >/dev/null
+      stash_ref=""
+    else
+      echo
+      echo "warning: re-applied the saved work with conflicts." >&2
+      echo "Resolve the conflicts manually. Backup branch kept: ${backup_branch}" >&2
+      exit 1
+    fi
+  fi
+
+  echo "Restored ${current_branch} to the pre-rebase state."
+  echo "Backup branch kept: ${backup_branch}"
+  exit 1
+}
+
+echo "Creating backup branch: ${backup_branch}"
+git branch "${backup_branch}" HEAD
+
+if [[ -n "$(git status --porcelain)" ]]; then
+  echo "Stashing current work, including untracked files."
+  before_stash="$(git rev-parse -q --verify refs/stash 2>/dev/null || true)"
+  git stash push --include-untracked -m "${stash_message}" >/dev/null
+  after_stash="$(git rev-parse -q --verify refs/stash 2>/dev/null || true)"
+  if [[ "${before_stash}" != "${after_stash}" ]]; then
+    stash_ref="stash@{0}"
+  fi
+else
+  echo "Working tree is clean; no stash needed."
+fi
+
+echo "Fetching ${base_remote} ${base_branch}."
+git fetch "${base_remote}" "${base_branch}" || restore_original_state "fetch failed"
+
+echo "Rebasing ${current_branch} onto ${base_ref}."
+git rebase "${base_ref}" || restore_original_state "rebase conflict or failure"
+
+if [[ -n "${stash_ref}" ]]; then
+  echo "Restoring stashed work."
+  git stash apply --index "${stash_ref}" || restore_original_state "stash apply conflict or failure"
+  git stash drop "${stash_ref}" >/dev/null
+  stash_ref=""
+fi
+
+echo "Deleting backup branch: ${backup_branch}"
+git branch -D "${backup_branch}" >/dev/null
+
+echo
+echo "Done. ${current_branch} is rebased on ${base_ref}."
