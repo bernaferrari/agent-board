@@ -13,7 +13,10 @@ Instead of scattering tasks across long chat histories, it provides **three sync
 Everything stays local. Beads is the single source of truth. Most models already understand it without extra skills.
 
 <p align="center">
-  <img src="assets/three-light.png" alt="AgentBoard — Board, List, and Graph views (light mode)" width="1000">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/three-dark.png">
+    <img src="assets/three-light.png" alt="AgentBoard — Board, List, and Graph views" width="1000">
+  </picture>
 </p>
 
 ## Why AgentBoard
@@ -33,6 +36,28 @@ No new formats to teach the LLM. No black-box state. If you already use Beads, A
 - **One-click Chat Handoff** — Open OpenCode chat with the selected issue pre-attached
 - **Inline Issue Creation** — Create tasks from the composer and optionally continue straight into chat
 - **Local-first** — Beads database remains the single source of truth for status, priority, and dependencies
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="assets/board.png" alt="AgentBoard Kanban board with an issue detail drawer">
+      <br>
+      <sub><strong>Board</strong> — Move work through its lifecycle and inspect an issue without losing context.</sub>
+    </td>
+    <td width="50%">
+      <img src="assets/list-closed.png" alt="AgentBoard list view grouped by issue status">
+      <br>
+      <sub><strong>List</strong> — Scan a large backlog with status, type, and priority visible at a glance.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2">
+      <img src="assets/graph.png" alt="AgentBoard dependency graph with filters and minimap">
+      <br>
+      <sub><strong>Graph</strong> — Explore dependency chains with filters, zoom controls, and a minimap.</sub>
+    </td>
+  </tr>
+</table>
 
 ## Get Started
 
@@ -56,7 +81,3 @@ bun run dev:desktop
 This fork was built after studying [OpenAI Symphony](https://openai.com/index/introducing-openai-symphony/), [Cursor's agent Kanban](https://github.com/cursor/cookbook/tree/main/sdk/agent-kanban), and [beads-ui](https://github.com/mantoni/beads-ui). The goal is a lightweight, uncoupled interface that works with any model that already understands Beads, rather than forcing yet another custom system. Although OpenCode is helpful for some chat features, it is easy to extract AgentBoard into its own desktop client or add as part of any existing app/IDE. There are a few styling and UI components being reused from OpenCode, but nothing that can't be easily if needed.
 
 This fork periodically rebases onto upstream OpenCode. Feedback and contributions are welcome.
-
-<p align="center">
-  <img src="assets/three-dark.png" alt="AgentBoard — Board, List, and Graph views (dark mode)" width="1000">
-</p>
