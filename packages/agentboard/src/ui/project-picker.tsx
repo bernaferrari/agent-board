@@ -15,17 +15,14 @@ export function ProjectPicker(props: {
   const [query, setQuery] = createSignal("")
   const [directory, setDirectory] = createSignal("")
   const [opening, setOpening] = createSignal("")
-  const projects = createMemo(() =>
-    Array.from(
-      new Map<string, { name: string; directory: string; id?: string; tracker?: TrackerStatus }>([
-        ...props.snapshot.suggestions.map((item) => [item.directory, { ...item, id: undefined }] as const),
-        ...props.snapshot.projects.map((item) => [item.directory, item] as const),
-      ]).values(),
-    ).sort(
-      (a, b) =>
-        Number(!!b.id) - Number(!!a.id) || a.name.localeCompare(b.name) || a.directory.localeCompare(b.directory),
-    ),
-  )
+  const projects = createMemo(() => {
+    const connected = new Map(props.snapshot.projects.map((item) => [item.directory, item]))
+    const desktopPaths = new Set(props.snapshot.suggestions.map((item) => item.directory))
+    return [
+      ...props.snapshot.suggestions.map((item) => ({ ...connected.get(item.directory), ...item })),
+      ...props.snapshot.projects.filter((item) => !desktopPaths.has(item.directory)),
+    ]
+  })
   const filtered = createMemo(() =>
     projects().filter((item) => `${item.name} ${item.directory}`.toLowerCase().includes(query().trim().toLowerCase())),
   )
@@ -49,8 +46,8 @@ export function ProjectPicker(props: {
       </Show>
       <div class="project-heading">
         <div>
-          <h2 id="projects-heading">Open a project</h2>
-          <p>Your local projects from ChatGPT desktop.</p>
+          <h2 id="projects-heading">Projects</h2>
+          <p>Choose a board. Projects follow your desktop sidebar.</p>
         </div>
         <button
           class="project-refresh"
@@ -104,9 +101,14 @@ export function ProjectPicker(props: {
             <div role="listitem">
               <button
                 class="project-choice"
-                classList={{ "project-opening": opening() === project.directory }}
+                classList={{
+                  "project-opening": props.busy && opening() === project.directory,
+                  "project-current": !!project.id && props.snapshot.board?.project.id === project.id,
+                }}
                 disabled={props.busy}
                 aria-label={`Open ${project.directory}`}
+                aria-current={project.id && props.snapshot.board?.project.id === project.id ? "page" : undefined}
+                title={project.directory}
                 onClick={() => open(project)}
               >
                 <svg
@@ -143,11 +145,10 @@ export function ProjectPicker(props: {
                           ? "Unavailable"
                           : props.snapshot.board?.project.id === project.id && project.id
                             ? "Current"
-                            : "Open →"}
+                            : project.tracker === "present"
+                              ? "Beads"
+                              : "Open →"}
                   </span>
-                  <Show when={project.tracker === "present"}>
-                    <small>Beads</small>
-                  </Show>
                   <Show when={project.tracker === "unknown"}>
                     <small>Tracker unchecked</small>
                   </Show>

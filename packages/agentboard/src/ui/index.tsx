@@ -323,7 +323,11 @@ function Workspace() {
         <Show when={snapshot().projects.length}>
           <button class="project-switch" disabled={busy()} title={board()?.project.directory} onClick={openProjects}>
             <span class="hint">Project</span>
-            <strong>{board()?.project.name ?? "Choose a project"}</strong>
+            <strong>
+              {snapshot().suggestions.find((item) => item.directory === board()?.project.directory)?.name ??
+                board()?.project.name ??
+                "Choose a project"}
+            </strong>
             <span aria-hidden="true">⌄</span>
           </button>
         </Show>

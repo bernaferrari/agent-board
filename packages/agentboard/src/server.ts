@@ -35,14 +35,16 @@ const write = {
 }
 
 export function createServer(store: Store, html: string, options: { desktopState?: string } = {}) {
-  const server = new McpServer({ name: "agent-board", version: "0.1.5" })
+  const server = new McpServer({ name: "agent-board", version: "0.1.6" })
   new OpenAIExtensions(server)
   const projectChoices = async () => {
     const desktop = await readDesktopProjects(options.desktopState)
     const projects = store.list()
-    const suggestions = Array.from(
-      new Map([...store.suggestions(), ...desktop.suggestions].map((item) => [item.directory, item])).values(),
-    ).sort((a, b) => a.name.localeCompare(b.name) || a.directory.localeCompare(b.directory))
+    const desktopPaths = new Set(desktop.suggestions.map((item) => item.directory))
+    const suggestions = [
+      ...desktop.suggestions,
+      ...store.suggestions().filter((item) => !desktopPaths.has(item.directory)),
+    ]
     const statuses = new Map(
       await Promise.all(
         [...new Set([...projects, ...suggestions].map((item) => item.directory))].map(

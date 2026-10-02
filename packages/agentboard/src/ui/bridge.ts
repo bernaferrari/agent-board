@@ -3,7 +3,7 @@ import { OpenAIExtensions } from "@openai/mcp-extensions/app"
 import type { Snapshot } from "../types"
 import { readSnapshot, readToolData } from "./tool-result"
 
-export const app = new App({ name: "AgentBoard", version: "0.1.5" }, { availableDisplayModes: ["fullscreen"] })
+export const app = new App({ name: "AgentBoard", version: "0.1.6" }, { availableDisplayModes: ["fullscreen"] })
 export const extensions = new OpenAIExtensions(app)
 
 export async function connect(onSnapshot: (snapshot: Snapshot) => void, onError: (message: string) => void) {

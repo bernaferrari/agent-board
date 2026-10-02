@@ -17,19 +17,39 @@ export async function readDesktopProjects(
   const modern = state.data["local-projects"]
   const entries = z.record(z.string(), z.unknown()).safeParse(modern)
   if (modern !== undefined && !entries.success) return { suggestions: [], projectProblem: problem }
+  const labels = z.record(z.string(), z.string()).safeParse(state.data["electron-workspace-root-labels"]).data ?? {}
+  const ordered = z.array(z.unknown()).safeParse(state.data["project-order"]).data ?? []
+  const projects = entries.success ? new Map(Object.entries(entries.data)) : new Map<string, unknown>()
+  // Keep the first sidebar name when several desktop projects share one root.
+  // Unordered or newly added projects follow the saved order in insertion order.
   const roots =
     modern !== undefined && entries.success
-      ? Object.values(entries.data).flatMap(
-          (entry) => z.object({ rootPaths: z.array(z.unknown()) }).safeParse(entry).data?.rootPaths ?? [],
+      ? [...new Set([...ordered.filter((id): id is string => typeof id === "string"), ...projects.keys()])].flatMap(
+          (id) => {
+            const entry = z
+              .object({ name: z.string().trim().min(1).optional().catch(undefined), rootPaths: z.array(z.unknown()) })
+              .safeParse(projects.get(id))
+            return entry.success ? entry.data.rootPaths.map((root) => ({ root, name: entry.data.name })) : []
+          },
         )
-      : (z.array(z.unknown()).safeParse(state.data["electron-saved-workspace-roots"]).data ?? [])
+      : (z.array(z.unknown()).safeParse(state.data["electron-saved-workspace-roots"]).data ?? []).map((root) => ({
+          root,
+          name: undefined,
+        }))
+  const seen = new Set<string>()
   const directories = roots
-    .map((root) => z.string().trim().min(1).safeParse(root).data)
-    .filter((root): root is string => !!root && path.isAbsolute(root))
-    .map((root) => path.resolve(root))
+    .flatMap((entry) => {
+      const root = z.string().trim().min(1).safeParse(entry.root).data
+      if (!root || !path.isAbsolute(root)) return []
+      const directory = path.resolve(root)
+      return [{ name: (entry.name ?? labels[directory]?.trim()) || path.basename(directory) || directory, directory }]
+    })
+    .filter((entry) => {
+      if (seen.has(entry.directory)) return false
+      seen.add(entry.directory)
+      return true
+    })
   return {
-    suggestions: Array.from(new Set(directories))
-      .map((directory) => ({ name: path.basename(directory) || directory, directory }))
-      .sort((a, b) => a.name.localeCompare(b.name) || a.directory.localeCompare(b.directory)),
+    suggestions: directories,
   }
 }

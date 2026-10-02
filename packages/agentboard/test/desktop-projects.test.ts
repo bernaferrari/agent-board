@@ -87,14 +87,56 @@ test("project list reads existing desktop paths without importing or connecting 
   expect(choices.suggestions).toHaveLength(3)
   expect(choices.suggestions).toMatchObject([
     { name: "first", directory: "/projects/first" },
-    { name: "second", directory: "/projects/second" },
     { name: "shared", directory: "/projects/shared" },
+    { name: "second", directory: "/projects/second" },
   ])
   expect(choices.projects).toEqual([])
   expect(stored).toEqual([])
   expect((refreshed.structuredContent as Pick<Snapshot, "suggestions">).suggestions).toMatchObject([
     { name: "fresh", directory: "/projects/fresh" },
     { name: "imported", directory: "/projects/imported" },
+  ])
+})
+
+test("desktop project order and renamed labels survive merging imported paths", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "agentboard-sidebar-"))
+  const state = path.join(directory, "desktop.json")
+  const entries = {
+    alpha: { name: "Zebra board", rootPaths: ["/projects/alpha", "/projects/shared"] },
+    beta: { name: "Desktop beta", rootPaths: ["/projects/beta", "/projects/shared"] },
+    remainder: { name: 42, rootPaths: ["/projects/remainder"] },
+  }
+  await Bun.write(
+    state,
+    JSON.stringify({ "local-projects": entries, "project-order": ["unknown", "beta", "beta", 4, "alpha"] }),
+  )
+  const store = await createStore(path.join(directory, "data"))
+  store.importProjects(["/projects/extra", "/projects/alpha"])
+  const server = createServer(store, "<!doctype html>", { desktopState: state })
+  const client = new Client({ name: "sidebar-order-test", version: "1.0.0" })
+  const transport = InMemoryTransport.createLinkedPair()
+  await server.connect(transport[0])
+  await client.connect(transport[1])
+  const first = await client.callTool({ name: "project_list", arguments: {} })
+  await Bun.write(state, JSON.stringify({ "local-projects": entries, "project-order": ["alpha", "beta"] }))
+  const refreshed = await client.callTool({ name: "project_list", arguments: {} })
+  await client.close()
+  await server.close()
+  store.close()
+  await rm(directory, { recursive: true, force: true })
+  expect((first.structuredContent as Snapshot).suggestions).toMatchObject([
+    { name: "Desktop beta", directory: "/projects/beta" },
+    { name: "Desktop beta", directory: "/projects/shared" },
+    { name: "Zebra board", directory: "/projects/alpha" },
+    { name: "remainder", directory: "/projects/remainder" },
+    { name: "extra", directory: "/projects/extra" },
+  ])
+  expect((refreshed.structuredContent as Snapshot).suggestions).toMatchObject([
+    { name: "Zebra board", directory: "/projects/alpha" },
+    { name: "Zebra board", directory: "/projects/shared" },
+    { name: "Desktop beta", directory: "/projects/beta" },
+    { name: "remainder", directory: "/projects/remainder" },
+    { name: "extra", directory: "/projects/extra" },
   ])
 })
 
@@ -105,6 +147,7 @@ test("desktop preferences support legacy roots, empty modern projects and malfor
     state,
     JSON.stringify({
       "electron-saved-workspace-roots": ["/projects/legacy", "/projects/legacy", "relative", null],
+      "electron-workspace-root-labels": { "/projects/legacy": "Renamed legacy" },
     }),
   )
   const legacy = await readDesktopProjects(state)
@@ -120,7 +163,7 @@ test("desktop preferences support legacy roots, empty modern projects and malfor
   const invalid = await readDesktopProjects(state)
   const missing = await readDesktopProjects(path.join(directory, "missing.json"))
   await rm(directory, { recursive: true, force: true })
-  expect(legacy.suggestions).toEqual([{ name: "legacy", directory: "/projects/legacy" }])
+  expect(legacy.suggestions).toEqual([{ name: "Renamed legacy", directory: "/projects/legacy" }])
   expect(empty.suggestions).toEqual([])
   expect(invalid.suggestions).toEqual([])
   expect(invalid.projectProblem).toContain("Couldn’t read")

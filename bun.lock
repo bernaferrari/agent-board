@@ -7,7 +7,7 @@
     },
     "packages/agentboard": {
       "name": "@agentboard/plugin",
-      "version": "0.1.5",
+      "version": "0.1.6",
       "dependencies": {
         "@modelcontextprotocol/ext-apps": "1.7.5",
         "@modelcontextprotocol/sdk": "1.29.0",
