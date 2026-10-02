@@ -1,0 +1,32 @@
+{
+  "name": "@agentboard/plugin",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "bun script/build.ts",
+    "typecheck": "tsc --noEmit",
+    "package": "bun script/package.ts",
+    "preview": "bun script/preview.ts",
+    "validate": "bun script/validate.ts",
+    "format": "prettier --write src script test vite.config.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/ext-apps": "1.7.5",
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "@openai/mcp-extensions": "0.1.0",
+    "solid-js": "1.9.15",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@cfworker/json-schema": "4.1.1",
+    "@playwright/test": "1.59.1",
+    "@types/bun": "1.3.13",
+    "@types/node": "24.12.2",
+    "prettier": "3.6.2",
+    "typescript": "5.8.2",
+    "vite": "7.1.4",
+    "vite-plugin-solid": "2.11.14"
+  }
+}

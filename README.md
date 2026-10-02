@@ -1,83 +1,64 @@
-<p align="center">
-  <img src="assets/opengraph-image.png" alt="AgentBoard" width="100%">
-</p>
+# AgentBoard for ChatGPT desktop
 
-AgentBoard turns your [Beads](https://github.com/gastownhall/beads) issues into a workspace where you and your coding models can plan, review, and hand off work together.
+AgentBoard brings your local [Beads](https://github.com/steveyegge/beads) issues into ChatGPT desktop. Plan work, inspect dependencies, attach an issue to chat, or hand it to a new ChatGPT conversation.
 
-Instead of scattering tasks across long chat histories, it provides **three synchronized views** of the same local issue graph:
+The plugin has three synchronized views: **Board**, **List**, and **Graph**. Beads owns issue status, priority, notes and dependencies. ChatGPT owns conversations and model execution. The plugin runs locally over stdio and requires no API key, OpenCode server, Electron shell or hosted service.
 
-- **Board** — Kanban columns (Open → In Progress → Needs Review → Closed)
-- **List** — Fast scanning of large backlogs
-- **Graph** — Interactive dependency map with zoom, pan, minimap, and manual layout
+## Install locally
 
-Everything stays local. Beads is the single source of truth. Most models already understand it without extra skills.
+Requires Bun 1.3.13 or newer, Beads 0.62 or newer with its Dolt runtime, and ChatGPT desktop in a local execution environment.
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/three-dark.png">
-    <img src="assets/three-light.png" alt="AgentBoard — Board, List, and Graph views" width="1000">
-  </picture>
-</p>
-
-## Why AgentBoard
-
-In the last few weeks, OpenAI released [Symphony](https://openai.com/index/introducing-openai-symphony/), [Cursor](https://github.com/cursor/cookbook/tree/main/sdk/agent-kanban) made an example and [Hermes](https://hermes-agent.nousresearch.com/docs/user-guide/features/kanban) shipped their own board. All of them require the agent to learn and maintain a separate orchestration system.
-
-AgentBoard takes a different approach: it reuses [Beads](https://github.com/gastownhall/beads), a lightweight local-first issue tracker that many models already know natively. The UI works inside the [OpenCode](https://github.com/anomalyco/opencode) desktop environment.
-
-No new formats to teach the LLM. No black-box state. If you already use Beads, AgentBoard will already work for you.
-
-## Features
-
-- **Kanban Board** — Drag cards between columns; status updates sync instantly to Beads
-- **Interactive Dependency Graph** — Zoom, pan, minimap, filters, and manual node positioning
-- **List View** — Scan hundreds of tasks
-- **Rich Issue Drawer** — Dependencies, timeline, artifacts, priority, and quick actions
-- **One-click Chat Handoff** — Open OpenCode chat with the selected issue pre-attached
-- **Inline Issue Creation** — Create tasks from the composer and optionally continue straight into chat
-- **Local-first** — Beads database remains the single source of truth for status, priority, and dependencies
-
-<table>
-  <tr>
-    <td width="50%">
-      <img src="assets/board.png" alt="AgentBoard Kanban board with an issue detail drawer">
-      <br>
-      <sub><strong>Board</strong> — Move work through its lifecycle and inspect an issue without losing context.</sub>
-    </td>
-    <td width="50%">
-      <img src="assets/list-closed.png" alt="AgentBoard list view grouped by issue status">
-      <br>
-      <sub><strong>List</strong> — Scan a large backlog with status, type, and priority visible at a glance.</sub>
-    </td>
-  </tr>
-  <tr>
-    <td colspan="2">
-      <img src="assets/graph.png" alt="AgentBoard dependency graph with filters and minimap">
-      <br>
-      <sub><strong>Graph</strong> — Explore dependency chains with filters, zoom controls, and a minimap.</sub>
-    </td>
-  </tr>
-</table>
-
-## Get Started
-
-Requires [Bun](https://bun.sh) and the Beads `bd` CLI on your PATH.
-
-```bash
-git clone https://github.com/bernaferrari/agent-board
-cd agent-board
+```sh
 bun install
-bun run dev:desktop
+bun run build
+codex plugin marketplace add .
+codex plugin add agent-board@agentboard-desktop
 ```
 
-1. Open your project in the OpenCode desktop app
-2. Click **AgentBoard** in the sidebar
-3. Initialize Beads with one click (or run `bd init` in your project folder)
+The `codex` command is the desktop host's plugin management CLI. The portable plugin is in `plugins/agent-board`; `.agents/plugins/marketplace.json` makes it discoverable from this repository. Restart the desktop app if the new plugin does not appear in the Plugins Directory. Open **AgentBoard Workspace** from the plugin's navigation or chat entrypoint. Select a local folder containing `.beads`, or invoke the plugin's setup skill to initialize one.
 
-**Pro tip:** Run `npx skills beads` to teach any model how to use [Beads](https://github.com/gastownhall/beads).
+For a private portable archive:
 
-## Philosophy
+```sh
+bun run package
+```
 
-This fork was built after studying [OpenAI Symphony](https://openai.com/index/introducing-openai-symphony/), [Cursor's agent Kanban](https://github.com/cursor/cookbook/tree/main/sdk/agent-kanban), and [beads-ui](https://github.com/mantoni/beads-ui). The goal is a lightweight, uncoupled interface that works with any model that already understands Beads, rather than forcing yet another custom system. Although OpenCode is helpful for some chat features, it is easy to extract AgentBoard into its own desktop client or add as part of any existing app/IDE. There are a few styling and UI components being reused from OpenCode, but nothing that can't be easily if needed.
+This writes `releases/agent-board-0.1.0.zip`, including the bundled server, self-contained HTML, manifests, icon, license and workflow skills. The archive needs no dependency installation after extraction; Bun and Beads remain host prerequisites. Use the local plugin installation flow for stdio packages. Account upload by itself cannot provide a local runtime to web or mobile clients.
 
-This fork periodically rebases onto upstream OpenCode. Feedback and contributions are welcome.
+## Work with a project
+
+- **Create** issues with acceptance criteria, type and priority. **Plan in ChatGPT** sends the goal to a new chat for discussion.
+- **Move** cards through Open → In Progress → Needs Review → Closed by dragging or using the issue drawer's status selector. Unresolved blockers prevent starting work.
+- **Inspect** descriptions, dependencies, notes and timestamps in the drawer. Add or remove prerequisites there.
+- **Attach to chat** supplies issue context without sending a message. **Work in new chat** uses ChatGPT's message extension and sends the handoff prompt when clicked. The new chat verifies the local project before implementation.
+- **Graph** shows prerequisites pointing to dependents. Scroll to pan, change zoom, drag nodes, and retain the saved layout across restarts.
+- Changes made through `bd` are picked up by Refresh or the visible board's 15-second refresh.
+
+Needs Review is represented by the `agentboard:review` label on a Beads `in_progress` issue. Moving to another column removes that label. This keeps the workflow compatible with Beads' standard statuses. Completion is explicit; the plugin does not infer success from a chat ending.
+
+## Development and verification
+
+```sh
+cd packages/agentboard
+bun typecheck
+bun test
+bun run build
+AGENTBOARD_PROJECT_DIRECTORY=/absolute/path/to/project bun run preview
+```
+
+The preview uses the official MCP Apps `AppBridge` with the real MCP server and Beads. It runs only on loopback, is a development test host, and is excluded from the plugin archive. `bun run dev` exposes the UI build for development, but the UI needs an MCP Apps host to connect.
+
+The integration suite creates an isolated temporary Beads tracker, exercises issue/dependency mutations through MCP, verifies status projections and layout persistence, and stops its test Dolt server afterward. UI verification uses the same preview test host and the browser checks documented below. Actual desktop entrypoint placement and new-chat creation must also be checked in ChatGPT desktop; browser-host verification alone does not establish those behaviors.
+
+See [architecture and migration](docs/architecture.md) for the local runtime boundaries and the source transformation, and [desktop verification](docs/desktop-verification.md) for the host checks.
+
+## Source layout
+
+```text
+packages/agentboard/          MCP server, Beads adapter, Solid UI and integration tests
+plugins/agent-board/          Portable ChatGPT plugin and workflow skills
+.agents/plugins/             Local marketplace definition
+releases/                    Generated private plugin archive
+```
+
+This transformation is on `chatgpt-plugin`. The original OpenCode-based app remains in the `agent-board` branch and Git history. The MIT attribution is preserved.

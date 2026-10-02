@@ -1,0 +1,11 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "agent-board": {
+      "type": "stdio",
+      "command": "bun",
+      "args": ["${PLUGIN_ROOT}/dist/server.js"],
+      "cwd": "${PLUGIN_ROOT}"
+    }
+  }
+}

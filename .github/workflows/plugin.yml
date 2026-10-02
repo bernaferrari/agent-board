@@ -1,0 +1,25 @@
+name: ChatGPT desktop plugin
+on:
+  push:
+    branches: [chatgpt-plugin]
+  pull_request:
+    paths: ["packages/agentboard/**", "plugins/agent-board/**", "package.json", "bun.lock", ".github/workflows/plugin.yml"]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - run: bun typecheck
+        working-directory: packages/agentboard
+      - run: bun run build
+      - run: bun script/smoke.ts
+        working-directory: packages/agentboard
+      - run: bun run package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agent-board-desktop
+          path: releases/*.zip

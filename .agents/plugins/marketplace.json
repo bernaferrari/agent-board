@@ -1,0 +1,11 @@
+{
+  "name": "agentboard-desktop",
+  "plugins": [
+    {
+      "name": "agent-board",
+      "source": { "source": "local", "path": "./plugins/agent-board" },
+      "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
+      "category": "Productivity"
+    }
+  ]
+}

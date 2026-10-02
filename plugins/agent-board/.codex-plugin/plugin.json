@@ -1,0 +1,23 @@
+{
+  "name": "agent-board",
+  "version": "0.1.0",
+  "description": "A local Beads workspace for ChatGPT desktop.",
+  "author": {
+    "name": "Bernardo Ferrari"
+  },
+  "skills": "./skills/",
+  "mcpServers": "./mcp.json",
+  "interface": {
+    "displayName": "AgentBoard",
+    "shortDescription": "Your local agent workspace",
+    "longDescription": "Plan, organize and review local Beads issues inside ChatGPT desktop. Switch between Board, List and dependency Graph views, attach issues to chat and hand work to a new ChatGPT conversation. Requires Bun, Beads and a local desktop execution environment.",
+    "developerName": "Bernardo Ferrari",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive"
+    ],
+    "logo": "./assets/icon.svg",
+    "composerIcon": "./assets/icon.svg",
+    "defaultPrompt": "Open AgentBoard and help me plan the next work for my local project."
+  }
+}
