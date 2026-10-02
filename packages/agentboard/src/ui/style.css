@@ -1013,6 +1013,37 @@ textarea:hover {
   flex-shrink: 0;
   color: var(--board-text);
   font-size: 12px;
+  text-align: right;
+}
+.project-state span,
+.project-state small {
+  display: block;
+}
+.project-state small {
+  margin-top: 6px;
+  color: var(--board-muted);
+  font-size: 11px;
+}
+.project-folder.has-tracker {
+  stroke: var(--board-text);
+}
+.show-more {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.graph-limit {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 28px;
+  font-size: 13px;
+  color: var(--board-muted);
+}
+.graph-limit button {
+  flex-shrink: 0;
 }
 .project-choice:focus-visible {
   outline-offset: -3px;

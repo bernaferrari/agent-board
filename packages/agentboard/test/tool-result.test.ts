@@ -4,6 +4,10 @@ import { readSnapshot, readToolData } from "../src/ui/tool-result"
 const snapshot = { projects: [], suggestions: [], board: null }
 
 test("loads snapshots from structured and text-only MCP replies", () => {
+  expect(
+    readSnapshot({ ...snapshot, suggestions: [{ name: "Board", directory: "/project", tracker: "present" }] })
+      .suggestions[0].tracker,
+  ).toBe("present")
   expect(readSnapshot(readToolData({ content: [], structuredContent: snapshot }))).toEqual(snapshot)
   expect(readSnapshot(readToolData({ content: [{ type: "text", text: JSON.stringify(snapshot) }] }))).toEqual(snapshot)
   expect(readSnapshot(readToolData({ content: [{ type: "text", text: '{"projects":[],"board":null}' }] }))).toEqual(

@@ -1,5 +1,5 @@
 import { createMemo, createSignal, For, Show } from "solid-js"
-import type { Snapshot } from "../types"
+import type { Snapshot, TrackerStatus } from "../types"
 import { folderFromDrop } from "./drop"
 
 export function ProjectPicker(props: {
@@ -17,7 +17,7 @@ export function ProjectPicker(props: {
   const [opening, setOpening] = createSignal("")
   const projects = createMemo(() =>
     Array.from(
-      new Map<string, { name: string; directory: string; id?: string }>([
+      new Map<string, { name: string; directory: string; id?: string; tracker?: TrackerStatus }>([
         ...props.snapshot.suggestions.map((item) => [item.directory, { ...item, id: undefined }] as const),
         ...props.snapshot.projects.map((item) => [item.directory, item] as const),
       ]).values(),
@@ -29,8 +29,14 @@ export function ProjectPicker(props: {
   const filtered = createMemo(() =>
     projects().filter((item) => `${item.name} ${item.directory}`.toLowerCase().includes(query().trim().toLowerCase())),
   )
-  const open = (project: { directory: string; id?: string }) => {
+  const open = (project: { directory: string; id?: string; tracker?: TrackerStatus }) => {
     setOpening(project.directory)
+    if (project.tracker === "missing")
+      return props.onError(
+        "This folder has no Beads tracker. Use the AgentBoard setup skill in ChatGPT to initialize one, then refresh this list.",
+      )
+    if (project.tracker === "unavailable")
+      return props.onError("This folder is unavailable. Check its path or reconnect its drive, then refresh this list.")
     if (project.id) return props.onSelect(project.id)
     props.onConnect(project.directory)
   }
@@ -103,19 +109,48 @@ export function ProjectPicker(props: {
                 aria-label={`Open ${project.directory}`}
                 onClick={() => open(project)}
               >
-                <svg class="project-folder" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10H3Z" />
+                <svg
+                  class="project-folder"
+                  classList={{ "has-tracker": project.tracker === "present" }}
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <Show
+                    when={project.tracker === "present"}
+                    fallback={<path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10H3Z" />}
+                  >
+                    <rect x="3" y="4" width="18" height="16" rx="3" />
+                    <path d="M9 4v16M15 4v16M5.5 8h1M11.5 8h1M17.5 8h1M5.5 11h1M11.5 11h1" />
+                  </Show>
+                  <Show when={project.tracker === "unavailable"}>
+                    <path d="m3 21 18-18" />
+                  </Show>
                 </svg>
                 <span class="project-path">
                   <strong>{project.name}</strong>
                   <small>{project.directory}</small>
                 </span>
-                <span class="project-state">
-                  {props.busy && opening() === project.directory
-                    ? "Opening…"
-                    : props.snapshot.board?.project.id === project.id && project.id
-                      ? "Current"
-                      : "Open →"}
+                <span
+                  class="project-state"
+                  title={project.tracker === "present" ? "A .beads tracker folder exists here." : undefined}
+                >
+                  <span>
+                    {props.busy && opening() === project.directory
+                      ? "Opening…"
+                      : project.tracker === "missing"
+                        ? "No Beads"
+                        : project.tracker === "unavailable"
+                          ? "Unavailable"
+                          : props.snapshot.board?.project.id === project.id && project.id
+                            ? "Current"
+                            : "Open →"}
+                  </span>
+                  <Show when={project.tracker === "present"}>
+                    <small>Beads</small>
+                  </Show>
+                  <Show when={project.tracker === "unknown"}>
+                    <small>Tracker unchecked</small>
+                  </Show>
                 </span>
               </button>
             </div>

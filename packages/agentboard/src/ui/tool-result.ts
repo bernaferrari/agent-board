@@ -1,10 +1,12 @@
 import { z } from "zod"
-import { Issue, Status } from "../types"
+import { Issue, Status, TrackerStatus } from "../types"
 
-const project = z.object({ id: z.string(), name: z.string(), directory: z.string() })
+const project = z.object({ id: z.string(), name: z.string(), directory: z.string(), tracker: TrackerStatus.optional() })
 const snapshot = z.object({
   projects: z.array(project),
-  suggestions: z.array(z.object({ name: z.string(), directory: z.string() })).default([]),
+  suggestions: z
+    .array(z.object({ name: z.string(), directory: z.string(), tracker: TrackerStatus.optional() }))
+    .default([]),
   board: z
     .object({
       project,

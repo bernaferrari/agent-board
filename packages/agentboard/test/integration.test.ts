@@ -160,7 +160,7 @@ describe("local MCP plugin with real Beads", () => {
     const imported = await call("project_import", { paths: [candidate, candidate, directory] })
     expect(imported.projects).toHaveLength(1)
     expect(imported.suggestions).toHaveLength(2)
-    expect(imported.suggestions).toContainEqual({ name: "not-connected", directory: candidate })
+    expect(imported.suggestions).toContainEqual({ name: "not-connected", directory: candidate, tracker: "unavailable" })
     const invalid = await client.callTool({ name: "project_import", arguments: { paths: ["relative/folder"] } })
     expect(invalid.isError).toBe(true)
     expect(store.suggestions()).toHaveLength(2)

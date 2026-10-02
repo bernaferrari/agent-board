@@ -10,6 +10,7 @@ import { runBd, showIssue } from "./beads"
 import { issuePrompt } from "./prompts"
 import { createStore } from "./store"
 import { readDesktopProjects } from "./desktop-projects"
+import { inspectTracker } from "./project-status"
 import type { Store } from "./store"
 import { IssueType, REVIEW_LABEL, Status } from "./types"
 
@@ -34,15 +35,24 @@ const write = {
 }
 
 export function createServer(store: Store, html: string, options: { desktopState?: string } = {}) {
-  const server = new McpServer({ name: "agent-board", version: "0.1.4" })
+  const server = new McpServer({ name: "agent-board", version: "0.1.5" })
   new OpenAIExtensions(server)
   const projectChoices = async () => {
     const desktop = await readDesktopProjects(options.desktopState)
+    const projects = store.list()
+    const suggestions = Array.from(
+      new Map([...store.suggestions(), ...desktop.suggestions].map((item) => [item.directory, item])).values(),
+    ).sort((a, b) => a.name.localeCompare(b.name) || a.directory.localeCompare(b.directory))
+    const statuses = new Map(
+      await Promise.all(
+        [...new Set([...projects, ...suggestions].map((item) => item.directory))].map(
+          async (directory) => [directory, await inspectTracker(directory)] as const,
+        ),
+      ),
+    )
     return {
-      projects: store.list(),
-      suggestions: Array.from(
-        new Map([...store.suggestions(), ...desktop.suggestions].map((item) => [item.directory, item])).values(),
-      ).sort((a, b) => a.name.localeCompare(b.name) || a.directory.localeCompare(b.directory)),
+      projects: projects.map((item) => ({ ...item, tracker: statuses.get(item.directory) })),
+      suggestions: suggestions.map((item) => ({ ...item, tracker: statuses.get(item.directory) })),
       ...(desktop.projectProblem ? { projectProblem: desktop.projectProblem } : {}),
     }
   }
@@ -96,7 +106,9 @@ export function createServer(store: Store, html: string, options: { desktopState
         "openai/ui": { entrypoints: [{ type: "global" }, { type: "thread" }] },
       },
     },
-    async (input) => response(await snapshot(input.projectID, true)),
+    // Opening navigation must never wait for a remembered tracker's database.
+    async (input) =>
+      response(input.projectID ? await snapshot(input.projectID, true) : { ...(await projectChoices()), board: null }),
   )
 
   server.registerTool(

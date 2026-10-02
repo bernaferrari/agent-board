@@ -77,7 +77,7 @@ const bridge = new AppBridge(
 
 const calls = { read: 0, handshake: 0 }
 async function tool(params: Record<string, unknown>) {
-  if (params.name === "board_read") {
+  if (params.name === "board_read" || params.name === "project_list") {
     calls.read += 1
     const failure = new URLSearchParams(location.search).get("toolFailure")
     if (failure === "always" || (failure === "once" && calls.read === 1))

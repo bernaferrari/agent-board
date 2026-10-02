@@ -17,7 +17,7 @@ codex plugin marketplace add .
 codex plugin add agent-board@agentboard-desktop
 ```
 
-The `codex` command is the desktop host's plugin management CLI. The portable plugin is in `plugins/agent-board`; `.agents/plugins/marketplace.json` makes it discoverable from this repository. Restart the desktop app if the new plugin does not appear in the Plugins Directory. Open **AgentBoard Workspace** from the plugin's navigation or chat entrypoint. The first screen lists your saved local project paths automatically. Search by name or path and click a project to open its board. **Open another folder** accepts a pasted or dropped absolute path. Select a folder containing `.beads`, or invoke the plugin's setup skill to initialize one.
+The `codex` command is the desktop host's plugin management CLI. The portable plugin is in `plugins/agent-board`; `.agents/plugins/marketplace.json` makes it discoverable from this repository. Restart the desktop app if the new plugin does not appear in the Plugins Directory. Open **AgentBoard Workspace** from the plugin's navigation or chat entrypoint. The first screen lists your saved local project paths automatically. Search by name or path and click a project to open its board. **Open another folder** accepts a pasted or dropped absolute path. A board icon and Beads label indicate a tracker folder; a folder icon indicates no tracker, and a slash indicates an unavailable path. Select a folder containing `.beads`, or invoke the plugin's setup skill to initialize one.
 
 For a private portable archive:
 
@@ -25,7 +25,7 @@ For a private portable archive:
 bun run package
 ```
 
-This writes `releases/agent-board-0.1.4.zip`, including the bundled server, self-contained HTML, manifests, icon, license and workflow skills. The archive needs no dependency installation after extraction; Bun and Beads remain host prerequisites. Use the local plugin installation flow for stdio packages. Account upload by itself cannot provide a local runtime to web or mobile clients.
+This writes `releases/agent-board-0.1.5.zip`, including the bundled server, self-contained HTML, manifests, icon, license and workflow skills. The archive needs no dependency installation after extraction; Bun and Beads remain host prerequisites. Use the local plugin installation flow for stdio packages. Account upload by itself cannot provide a local runtime to web or mobile clients.
 
 ## Work with a project
 
@@ -36,17 +36,17 @@ This writes `releases/agent-board-0.1.4.zip`, including the bundled server, self
 - **Graph** shows prerequisites pointing to dependents. Scroll to pan, fit the graph, drag nodes or use Shift+arrow keys, and retain the saved layout across restarts.
 - **Drop a brief** onto the board or draft: plain text and one `.md`/`.txt` file fill a reviewable draft. Choose file provides the same import without dragging. Drops never create issues automatically. Dropping into a populated draft appends context and keeps its existing fields.
 - **List** supports direct status changes. Sort by priority, update time or title, and hide closed issues in any view.
-- Changes made through `bd` are picked up by Refresh or the visible board's 15-second refresh.
+- Changes made through `bd` are picked up by Refresh or the visible board's refresh (15 seconds for small boards, at most once a minute for boards over 500 issues).
 
 Needs Review is represented by the `agentboard:review` label on a Beads `in_progress` issue. Moving to another column removes that label. This keeps the workflow compatible with Beads' standard statuses. Completion is explicit; the plugin does not infer success from a chat ending.
 
 ## Desktop project paths
 
-The local server reads saved desktop paths automatically and returns them through `project_list` and board snapshots. The first screen is a searchable inline list, with explicit opening and failure states. **Refresh list** rereads desktop preferences. Paths are normalized and deduplicated; display names come from folder names. Listing never opens folders, scans trackers or initializes Beads.
+The local server reads saved desktop paths automatically and returns them through `project_list` and board snapshots. The first screen is a searchable inline list, with explicit opening and failure states. **Refresh list** rereads desktop preferences. Paths are normalized and deduplicated; display names come from folder names. Listing performs only bounded shallow checks for the root and `.beads` directory. It never starts Beads, reads issues or initializes a tracker.
 
 The reader is a compatibility adapter for `$CODEX_HOME/.codex-global-state.json` (default `~/.codex/.codex-global-state.json`), using only `local-projects.rootPaths`, or legacy `electron-saved-workspace-roots` when the modern collection is absent. This is a desktop preferences format, not a public SDK API, and may change with desktop updates. The preferences file is never modified; other fields are not returned or stored. Missing or malformed state leaves manual paths and connected folders available. `AGENTBOARD_DESKTOP_STATE` overrides the file for development and testing.
 
-`project_import` remains available as a fallback for agent-supplied paths from the host's `list_projects` tool. There is no import round trip in the normal UI. The plugin stores only folder paths, not ChatGPT project IDs, and connects a folder only when the user chooses it.
+`project_import` remains available as a fallback for agent-supplied paths from the host's `list_projects` tool. There is no import round trip in the normal UI. The plugin stores only folder paths, not ChatGPT project IDs, and connects a folder only when the user chooses it. Opening AgentBoard always shows the project list first, so a large or unavailable last-selected tracker cannot hold up navigation.
 
 Cloud ChatGPT projects have no local filesystem path. Projects on remote hosts are excluded. Hosts without `list_projects` can still use manual paths. A dragged folder can be used only when the host supplies its path as text or a local file URI; a browser File object alone does not reveal an absolute folder path.
 

@@ -5,6 +5,11 @@ import type { AgentBoardBoard, BeadsIssue, Project, Position } from "./types"
 export function projectBoard(project: Project, issues: BeadsIssue[], positions: Position[] = []): AgentBoardBoard {
   const dependencies = dependenciesFromRawIssues(issues)
   const issueMap = new Map(issues.map((issue) => [issue.id, issue]))
+  const blocked = new Set(
+    dependencies
+      .filter((edge) => edge.type === "blocks" && issueMap.get(edge.toIssueID)?.status !== "closed")
+      .map((edge) => edge.fromIssueID),
+  )
   return {
     project,
     generatedAt: Date.now(),
@@ -15,15 +20,20 @@ export function projectBoard(project: Project, issues: BeadsIssue[], positions: 
         .filter((issue) => columnForIssue(issue) === id)
         .map((issue) => ({
           issue: {
-            ...issue,
-            blocked:
-              issue.status === "blocked" ||
-              dependencies.some(
-                (edge) =>
-                  edge.type === "blocks" &&
-                  edge.fromIssueID === issue.id &&
-                  issueMap.get(edge.toIssueID)?.status !== "closed",
+            id: issue.id,
+            title: issue.title,
+            status: issue.status,
+            description: issue.description,
+            priority: issue.priority,
+            labels: issue.labels,
+            blocked: issue.status === "blocked" || blocked.has(issue.id),
+            // Carry drawer metadata without duplicating descriptions and graph edges.
+            // issue_context still returns the complete freshly read Beads issue.
+            raw: Object.fromEntries(
+              Object.entries(issue.raw).filter(([key]) =>
+                ["issue_type", "notes", "created_at", "updated_at", "closed_at", "assignee", "owner"].includes(key),
               ),
+            ),
           },
           column: id,
         })),
@@ -41,9 +51,15 @@ export function columnForIssue(issue: BeadsIssue) {
 
 export async function loadBoard(project: Project, positions: Position[]) {
   const listed = normalizeIssues(await runBd(project.directory, ["list", "--all", "--limit", "0", "--tree=false"]))
-  // The list response has dependency counts only; batched show responses carry graph edges.
-  const chunks = Array.from({ length: Math.ceil(listed.length / 200) }, (_, index) =>
-    listed.slice(index * 200, (index + 1) * 200),
+  // Current Beads lists already include complete edges and notes. Older lists
+  // with counts only need details for issues with unresolved edge data.
+  const incomplete = listed.filter(
+    (issue) =>
+      !Array.isArray(issue.raw.dependencies) &&
+      (issue.raw.dependency_count === undefined || Number(issue.raw.dependency_count) > 0),
+  )
+  const chunks = Array.from({ length: Math.ceil(incomplete.length / 200) }, (_, index) =>
+    incomplete.slice(index * 200, (index + 1) * 200),
   )
   const issues = (
     await Promise.all(
@@ -52,5 +68,10 @@ export async function loadBoard(project: Project, positions: Position[]) {
       ),
     )
   ).flat()
-  return projectBoard(project, issues, positions)
+  const details = new Map(issues.map((issue) => [issue.id, issue]))
+  return projectBoard(
+    project,
+    listed.map((issue) => details.get(issue.id) ?? issue),
+    positions,
+  )
 }

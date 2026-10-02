@@ -31,6 +31,14 @@ function Workspace() {
   const [choosingProject, setChoosingProject] = createSignal(false)
   const [hideClosed, setHideClosed] = createSignal(false)
   const [sort, setSort] = createSignal("priority")
+  const [limits, setLimits] = createSignal({
+    open: 50,
+    in_progress: 50,
+    needs_review: 50,
+    closed: 50,
+    list: 100,
+    graph: 200,
+  })
   const [dropColumn, setDropColumn] = createSignal<string>()
   const [externalDrop, setExternalDrop] = createSignal(false)
   const [notes, setNotes] = createSignal("")
@@ -65,6 +73,7 @@ function Workspace() {
     setQuery("")
     setType("all")
     setHideClosed(false)
+    setLimits({ open: 50, in_progress: 50, needs_review: 50, closed: 50, list: 100, graph: 200 })
   }
   const card = createMemo(() => allCards().find((item) => item.issue.id === selected()))
   const [drawer, setDrawer] = createSignal<HTMLDialogElement>()
@@ -107,6 +116,12 @@ function Workspace() {
     return success
   }
   const refresh = async () => {
+    if (!board() || choosingProject()) {
+      const choices = await call<Pick<Snapshot, "projects" | "suggestions" | "projectProblem">>("project_list")
+      setSnapshot((current) => ({ ...current, ...choices }))
+      setLoaded(true)
+      return
+    }
     const value = await call<Snapshot>("board_read", board() ? { projectID: board()!.project.id } : {})
     setSnapshot(value)
     setLoaded(true)
@@ -180,6 +195,7 @@ function Workspace() {
     if (
       !ready() ||
       !board() ||
+      (allCards().length > 500 && Date.now() - board()!.generatedAt < 60000) ||
       busy() ||
       background.pending ||
       dragID() ||
@@ -478,10 +494,20 @@ function Workspace() {
                       <For
                         each={cards()
                           .filter((card) => card.column === status)
+                          .slice(0, limits()[status])
                           .map((item) => item.issue.id)}
                       >
                         {(id) => <Card card={byID().get(id)!} />}
                       </For>
+                      <Show when={cards().filter((card) => card.column === status).length > limits()[status]}>
+                        <button
+                          class="show-more"
+                          onClick={() => setLimits((current) => ({ ...current, [status]: current[status] + 50 }))}
+                        >
+                          Show 50 more · {cards().filter((card) => card.column === status).length - limits()[status]}{" "}
+                          remaining
+                        </button>
+                      </Show>
                       <Show when={!cards().some((card) => card.column === status)}>
                         <p class="column-empty">
                           {filtered()
@@ -509,7 +535,11 @@ function Workspace() {
                   </tr>
                 </thead>
                 <tbody>
-                  <For each={cards().map((item) => item.issue.id)}>
+                  <For
+                    each={cards()
+                      .slice(0, limits().list)
+                      .map((item) => item.issue.id)}
+                  >
                     {(id) => {
                       const item = () => byID().get(id)!
                       return (
@@ -544,6 +574,14 @@ function Workspace() {
                   </For>
                 </tbody>
               </table>
+              <Show when={cards().length > limits().list}>
+                <button
+                  class="show-more"
+                  onClick={() => setLimits((current) => ({ ...current, list: current.list + 100 }))}
+                >
+                  Show 100 more · {cards().length - limits().list} remaining
+                </button>
+              </Show>
               <Show when={!cards().length}>
                 <div class="filter-empty">
                   <h2>Your first issue starts here</h2>
@@ -554,11 +592,21 @@ function Workspace() {
             </div>
           </Show>
           <Show when={view() === "graph" && (!filtered() || cards().length)}>
+            <Show when={cards().length > limits().graph}>
+              <div class="graph-limit">
+                <span>
+                  Showing {limits().graph} of {cards().length} issues. Search or hide closed issues to focus the graph.
+                </span>
+                <button onClick={() => setLimits((current) => ({ ...current, graph: current.graph + 200 }))}>
+                  Show 200 more
+                </button>
+              </div>
+            </Show>
             <Show when={board()!.project.id} keyed>
               {(projectID) => (
                 <Graph
                   board={{ ...board()!, project: { ...board()!.project, id: projectID } }}
-                  cards={cards()}
+                  cards={cards().slice(0, limits().graph)}
                   busy={busy()}
                   onSelect={select}
                   onSave={(positions) =>

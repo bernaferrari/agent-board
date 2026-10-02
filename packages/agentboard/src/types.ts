@@ -23,8 +23,10 @@ export type AgentBoardDependency = {
   type: string
 }
 export type AgentBoardCard = { issue: BeadsIssue; column: AgentBoardColumnID }
-export type Project = { id: string; name: string; directory: string }
-export type ProjectSuggestion = { name: string; directory: string }
+export const TrackerStatus = z.enum(["present", "missing", "unavailable", "unknown"])
+export type TrackerStatus = z.infer<typeof TrackerStatus>
+export type Project = { id: string; name: string; directory: string; tracker?: TrackerStatus }
+export type ProjectSuggestion = { name: string; directory: string; tracker?: TrackerStatus }
 export type Position = { issueID: string; x: number; y: number }
 export type AgentBoardBoard = {
   project: Project
