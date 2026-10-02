@@ -4,6 +4,8 @@ AgentBoard brings your local [Beads](https://github.com/steveyegge/beads) issues
 
 The plugin has three synchronized views: **Board**, **List**, and **Graph**. Beads owns issue status, priority, notes and dependencies. ChatGPT owns conversations and model execution. The plugin runs locally over stdio and requires no API key, OpenCode server, Electron shell or hosted service.
 
+The workspace follows ChatGPT's live theme, including host colors, fonts, focus rings, corner radii and shadows. All views and dialogs use the host's semantic tokens; OpenAI's official stylesheet supplies light/dark defaults when a host omits tokens. There is no separate OpenCode theme or board palette.
+
 ## Install locally
 
 Requires Bun 1.3.13 or newer, Beads 0.62 or newer with its Dolt runtime, and ChatGPT desktop in a local execution environment.
@@ -23,7 +25,7 @@ For a private portable archive:
 bun run package
 ```
 
-This writes `releases/agent-board-0.1.1.zip`, including the bundled server, self-contained HTML, manifests, icon, license and workflow skills. The archive needs no dependency installation after extraction; Bun and Beads remain host prerequisites. Use the local plugin installation flow for stdio packages. Account upload by itself cannot provide a local runtime to web or mobile clients.
+This writes `releases/agent-board-0.1.2.zip`, including the bundled server, self-contained HTML, manifests, icon, license and workflow skills. The archive needs no dependency installation after extraction; Bun and Beads remain host prerequisites. Use the local plugin installation flow for stdio packages. Account upload by itself cannot provide a local runtime to web or mobile clients.
 
 ## Work with a project
 
@@ -55,6 +57,8 @@ AGENTBOARD_PROJECT_DIRECTORY=/absolute/path/to/project bun run preview
 ```
 
 The preview uses the official MCP Apps `AppBridge` with the real MCP server and Beads. It runs only on loopback, is a development test host, and is excluded from the plugin archive. `bun run dev` exposes the UI build for development, but the UI needs an MCP Apps host to connect.
+
+Open the preview with `?themeControls=1` to switch live between light/dark defaults and deliberately distinct sample host tokens. These controls belong to the test host and are excluded from the plugin UI. Verify the Board, List, Graph and dialogs, including an unsaved draft, without reloading between theme changes.
 
 The integration suite creates an isolated temporary Beads tracker, exercises issue/dependency mutations through MCP, verifies status projections and layout persistence, and stops its test Dolt server afterward. UI verification uses the same preview test host and the browser checks documented below. Actual desktop entrypoint placement and new-chat creation must also be checked in ChatGPT desktop; browser-host verification alone does not establish those behaviors.
 

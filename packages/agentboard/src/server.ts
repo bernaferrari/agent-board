@@ -33,7 +33,7 @@ const write = {
 }
 
 export function createServer(store: Store, html: string) {
-  const server = new McpServer({ name: "agent-board", version: "0.1.1" })
+  const server = new McpServer({ name: "agent-board", version: "0.1.2" })
   new OpenAIExtensions(server)
   const snapshot = async (id?: string, recover = false) => {
     const projects = store.list()

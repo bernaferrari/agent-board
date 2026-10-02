@@ -36,8 +36,11 @@ const listener = Bun.serve({
       return Response.json({ ok: true })
     }
     if (url.pathname === "/captures") return Response.json(captures)
+    const controls = url.searchParams.has("themeControls")
+      ? '<nav aria-label="Test host themes" style="height:40px;display:flex;gap:8px;align-items:center;padding:0 8px;font:14px system-ui;background:#eee;color:#222"><span>Test host:</span><button data-theme="light">Light fallback</button><button data-theme="dark">Dark fallback</button><button data-theme="light" data-palette="host">Host light</button><button data-theme="dark" data-palette="host">Host dark</button></nav>'
+      : ""
     return new Response(
-      '<!doctype html><html lang="en"><title>AgentBoard test host</title><body style="margin:0"><iframe title="AgentBoard" style="width:100vw;height:100vh;border:0"></iframe><script type="module" src="/host.js"></script></body></html>',
+      `<!doctype html><html lang="en"><title>AgentBoard test host</title><body style="margin:0">${controls}<iframe title="AgentBoard" style="width:100vw;height:calc(100vh - ${controls ? 40 : 0}px);border:0"></iframe><script type="module" src="/host.js"></script></body></html>`,
       { headers: { "Content-Type": "text/html" } },
     )
   },

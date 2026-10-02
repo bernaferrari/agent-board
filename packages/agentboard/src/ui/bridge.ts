@@ -1,8 +1,8 @@
-import { App, applyDocumentTheme, applyHostStyleVariables } from "@modelcontextprotocol/ext-apps"
+import { App, applyDocumentTheme, applyHostFonts, applyHostStyleVariables } from "@modelcontextprotocol/ext-apps"
 import { OpenAIExtensions } from "@openai/mcp-extensions/app"
 import type { Snapshot } from "../types"
 
-export const app = new App({ name: "AgentBoard", version: "0.1.1" }, { availableDisplayModes: ["fullscreen"] })
+export const app = new App({ name: "AgentBoard", version: "0.1.2" }, { availableDisplayModes: ["fullscreen"] })
 export const extensions = new OpenAIExtensions(app)
 
 export async function connect(onSnapshot: (snapshot: Snapshot) => void, onError: (message: string) => void) {
@@ -23,6 +23,7 @@ export async function connect(onSnapshot: (snapshot: Snapshot) => void, onError:
     const context = app.getHostContext()
     if (context?.theme) applyDocumentTheme(context.theme)
     if (context?.styles?.variables) applyHostStyleVariables(context.styles.variables)
+    if (context?.styles?.css?.fonts) applyHostFonts(context.styles.css.fonts)
   }
   app.addEventListener("hostcontextchanged", theme)
   await app.connect()

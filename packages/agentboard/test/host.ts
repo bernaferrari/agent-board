@@ -1,5 +1,60 @@
 import { AppBridge, PostMessageTransport } from "@modelcontextprotocol/ext-apps/app-bridge"
 import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js"
+import type { McpUiStyles } from "@modelcontextprotocol/ext-apps"
+
+// Deliberately distinct sample tokens expose any hardcoded widget colors.
+const palettes = {
+  light: {
+    "--color-background-primary": "#faf8f4",
+    "--color-background-secondary": "#eeeae2",
+    "--color-background-inverse": "#242124",
+    "--color-background-disabled": "#e7e2dc",
+    "--color-background-info": "#dbe8fa",
+    "--color-text-primary": "#242124",
+    "--color-text-secondary": "#66606a",
+    "--color-text-tertiary": "#746c76",
+    "--color-text-inverse": "#faf8f4",
+    "--color-text-disabled": "#777078",
+    "--color-text-info": "#265a9c",
+    "--color-text-danger": "#ac2929",
+    "--color-text-warning": "#875209",
+    "--color-text-success": "#226b47",
+    "--color-border-primary": "#a9a2ac",
+    "--color-border-secondary": "#d4ccd5",
+    "--color-ring-primary": "#514455",
+    "--border-radius-sm": "9px",
+    "--border-radius-md": "11px",
+    "--border-radius-lg": "15px",
+    "--font-sans": "Georgia, serif",
+    "--font-weight-medium": "500",
+    "--shadow-sm": "0 2px 3px #24212414",
+  },
+  dark: {
+    "--color-background-primary": "#211e27",
+    "--color-background-secondary": "#302b38",
+    "--color-background-inverse": "#f4eff9",
+    "--color-background-disabled": "#383240",
+    "--color-background-info": "#293751",
+    "--color-text-primary": "#f4eff9",
+    "--color-text-secondary": "#c1b6cd",
+    "--color-text-tertiary": "#a99cb9",
+    "--color-text-inverse": "#211e27",
+    "--color-text-disabled": "#a397ae",
+    "--color-text-info": "#8bbafa",
+    "--color-text-danger": "#ff9a9a",
+    "--color-text-warning": "#ecc078",
+    "--color-text-success": "#86d6ad",
+    "--color-border-primary": "#887c96",
+    "--color-border-secondary": "#55495f",
+    "--color-ring-primary": "#d5c1e3",
+    "--border-radius-sm": "9px",
+    "--border-radius-md": "11px",
+    "--border-radius-lg": "15px",
+    "--font-sans": "Georgia, serif",
+    "--font-weight-medium": "500",
+    "--shadow-sm": "0 2px 3px #00000040",
+  },
+} satisfies Record<string, Partial<McpUiStyles>>
 
 const frame = document.querySelector<HTMLIFrameElement>("iframe")!
 const bridge = new AppBridge(
@@ -53,3 +108,18 @@ transport.onmessage = (message, extra) => {
   forward?.(message, extra)
 }
 frame.src = "/board"
+
+document.querySelectorAll<HTMLButtonElement>("[data-theme]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const theme = button.dataset.theme === "dark" ? "dark" : "light"
+    bridge.setHostContext({
+      theme,
+      styles: {
+        // The SDK's mapped type requires every key; hosts may supply a subset.
+        variables: (button.dataset.palette === "host"
+          ? palettes[theme]
+          : Object.fromEntries(Object.keys(palettes[theme]).map((key) => [key, ""]))) as McpUiStyles,
+      },
+    })
+  })
+})
