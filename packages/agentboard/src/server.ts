@@ -9,6 +9,7 @@ import { loadBoard } from "./board"
 import { runBd, showIssue } from "./beads"
 import { issuePrompt } from "./prompts"
 import { createStore } from "./store"
+import { readDesktopProjects } from "./desktop-projects"
 import type { Store } from "./store"
 import { IssueType, REVIEW_LABEL, Status } from "./types"
 
@@ -32,9 +33,19 @@ const write = {
   openWorldHint: false,
 }
 
-export function createServer(store: Store, html: string) {
-  const server = new McpServer({ name: "agent-board", version: "0.1.2" })
+export function createServer(store: Store, html: string, options: { desktopState?: string } = {}) {
+  const server = new McpServer({ name: "agent-board", version: "0.1.3" })
   new OpenAIExtensions(server)
+  const projectChoices = async () => {
+    const desktop = await readDesktopProjects(options.desktopState)
+    return {
+      projects: store.list(),
+      suggestions: Array.from(
+        new Map([...store.suggestions(), ...desktop.suggestions].map((item) => [item.directory, item])).values(),
+      ).sort((a, b) => a.name.localeCompare(b.name) || a.directory.localeCompare(b.directory)),
+      ...(desktop.projectProblem ? { projectProblem: desktop.projectProblem } : {}),
+    }
+  }
   const snapshot = async (id?: string, recover = false) => {
     const projects = store.list()
     const selected = id ?? store.selected() ?? projects[0]?.id
@@ -49,8 +60,7 @@ export function createServer(store: Store, html: string) {
       : { board: null }
     if (result.board) store.select(result.board.project.id)
     return {
-      projects,
-      suggestions: store.suggestions(),
+      ...(await projectChoices()),
       ...result,
     }
   }
@@ -100,7 +110,7 @@ export function createServer(store: Store, html: string) {
     },
     async (input) => {
       store.importProjects(input.paths)
-      return response({ projects: store.list(), suggestions: store.suggestions() })
+      return response(await projectChoices())
     },
   )
 
@@ -112,18 +122,19 @@ export function createServer(store: Store, html: string) {
       inputSchema: { projectID: projectID.optional() },
       annotations: readOnly,
     },
-    async (input) => response(await snapshot(input.projectID)),
+    async (input) => response(await snapshot(input.projectID, !input.projectID)),
   )
 
   server.registerTool(
     "project_list",
     {
-      title: "List connected projects",
-      description: "List local folders already connected to AgentBoard. Does not read unconnected folders.",
+      title: "List desktop project paths",
+      description:
+        "List saved local desktop project paths and connected AgentBoard folders. Reads desktop preferences without scanning folders or initializing trackers. Excludes remote and cloud projects.",
       inputSchema: {},
       annotations: readOnly,
     },
-    async () => response({ projects: store.list() }),
+    async () => response(await projectChoices()),
   )
 
   server.registerTool(

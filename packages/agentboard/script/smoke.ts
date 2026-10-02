@@ -16,6 +16,7 @@ const transport = new StdioClientTransport({
       Object.entries(Bun.env).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
     ),
     PLUGIN_DATA: directory,
+    AGENTBOARD_DESKTOP_STATE: path.join(directory, "missing-desktop-state.json"),
   },
   stderr: "pipe",
 })

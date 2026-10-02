@@ -96,6 +96,7 @@ bridge.onupdatemodelcontext = async (params) => {
   return {}
 }
 bridge.oninitialized = async () => {
+  if (new URLSearchParams(location.search).has("skipInitialResult")) return
   await bridge.sendToolInput({ arguments: {} })
   await bridge.sendToolResult(await tool({ name: "board_open", arguments: {} }))
 }

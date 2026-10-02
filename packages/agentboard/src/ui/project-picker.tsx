@@ -1,4 +1,4 @@
-import { createSignal, For, onCleanup, onMount, Show } from "solid-js"
+import { createMemo, createSignal, For, Show } from "solid-js"
 import type { Snapshot } from "../types"
 import { folderFromDrop } from "./drop"
 
@@ -9,139 +9,172 @@ export function ProjectPicker(props: {
   onClose: () => void
   onConnect: (directory: string) => void
   onSelect: (id: string) => void
-  onImport: () => void
-  canImport: boolean
+  onRefresh: () => void
   onError: (message: string) => void
 }) {
+  const [query, setQuery] = createSignal("")
   const [directory, setDirectory] = createSignal("")
-  const dialog = { current: undefined as HTMLDialogElement | undefined }
-  const previous = document.activeElement
-  onCleanup(() => {
-    dialog.current?.close()
-    setTimeout(() => {
-      if (previous instanceof HTMLElement && previous.isConnected) previous.focus()
-    }, 0)
-  })
-  const suggestions = () =>
-    props.snapshot.suggestions.filter(
-      (item) => !props.snapshot.projects.some((project) => project.directory === item.directory),
-    )
-  onMount(() => dialog.current?.showModal())
+  const [opening, setOpening] = createSignal("")
+  const projects = createMemo(() =>
+    Array.from(
+      new Map<string, { name: string; directory: string; id?: string }>([
+        ...props.snapshot.suggestions.map((item) => [item.directory, { ...item, id: undefined }] as const),
+        ...props.snapshot.projects.map((item) => [item.directory, item] as const),
+      ]).values(),
+    ).sort(
+      (a, b) =>
+        Number(!!b.id) - Number(!!a.id) || a.name.localeCompare(b.name) || a.directory.localeCompare(b.directory),
+    ),
+  )
+  const filtered = createMemo(() =>
+    projects().filter((item) => `${item.name} ${item.directory}`.toLowerCase().includes(query().trim().toLowerCase())),
+  )
+  const open = (project: { directory: string; id?: string }) => {
+    setOpening(project.directory)
+    if (project.id) return props.onSelect(project.id)
+    props.onConnect(project.directory)
+  }
   return (
-    <dialog
-      class="project-picker"
-      ref={(element) => (dialog.current = element)}
-      aria-labelledby="projects-heading"
-      onClose={props.onClose}
-      onCancel={(event) => {
-        if (props.busy) event.preventDefault()
-      }}
-    >
-      <div class="drawer-top">
+    <section class="project-picker" aria-labelledby="projects-heading">
+      <Show when={props.snapshot.board}>
+        <button class="text-button project-back" disabled={props.busy} onClick={props.onClose}>
+          ← Back to board
+        </button>
+      </Show>
+      <div class="project-heading">
         <div>
-          <h2 id="projects-heading">Your projects</h2>
-          <p class="hint">Choose a local Beads workspace.</p>
+          <h2 id="projects-heading">Open a project</h2>
+          <p>Your local projects from ChatGPT desktop.</p>
         </div>
         <button
-          class="icon-button"
+          class="project-refresh"
           disabled={props.busy}
-          aria-label="Close projects"
-          onClick={() => dialog.current?.close()}
+          onClick={() => {
+            setOpening("")
+            props.onRefresh()
+          }}
         >
-          ×
+          {props.busy && !opening() ? "Refreshing…" : "Refresh list"}
         </button>
       </div>
-      <Show when={props.error}>
-        <p class="dialog-message error" role="alert">
-          {props.error}
+      <Show when={props.snapshot.projectProblem}>
+        <p class="project-message" role="status">
+          {props.snapshot.projectProblem}
         </p>
       </Show>
-      <Show when={props.snapshot.projects.length}>
-        <h3 class="section-label">Connected</h3>
-        <div class="project-choices">
-          <For each={props.snapshot.projects}>
-            {(project) => (
-              <button class="project-choice" disabled={props.busy} onClick={() => props.onSelect(project.id)}>
-                <span>
+      <Show when={projects().length}>
+        <label class="sr-only" for="project-search">
+          Search projects
+        </label>
+        <input
+          id="project-search"
+          class="project-search"
+          type="search"
+          placeholder="Search projects by name or path"
+          value={query()}
+          onInput={(event) => setQuery(event.currentTarget.value)}
+          autocomplete="off"
+        />
+        <div class="project-list-label">
+          <span>{query().trim() ? `${filtered().length} of ${projects().length}` : projects().length} projects</span>
+          <Show when={query()}>
+            <button class="text-button" onClick={() => setQuery("")}>
+              Clear search
+            </button>
+          </Show>
+        </div>
+      </Show>
+      <div class="project-choices" role="list" aria-label="Local projects">
+        <For
+          each={filtered()}
+          fallback={
+            <div class="project-list-empty">
+              <strong>{query() ? "No matching projects" : "No saved local projects"}</strong>
+              <p>{query() ? "Try another name or path." : "Add a project folder below to get started."}</p>
+            </div>
+          }
+        >
+          {(project) => (
+            <div role="listitem">
+              <button
+                class="project-choice"
+                classList={{ "project-opening": opening() === project.directory }}
+                disabled={props.busy}
+                aria-label={`Open ${project.directory}`}
+                onClick={() => open(project)}
+              >
+                <svg class="project-folder" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10H3Z" />
+                </svg>
+                <span class="project-path">
                   <strong>{project.name}</strong>
-                  <small title={project.directory}>{project.directory}</small>
+                  <small>{project.directory}</small>
                 </span>
                 <span class="project-state">
-                  {props.snapshot.board?.project.id === project.id ? "Current" : "Open →"}
+                  {props.busy && opening() === project.directory
+                    ? "Opening…"
+                    : props.snapshot.board?.project.id === project.id && project.id
+                      ? "Current"
+                      : "Open →"}
                 </span>
               </button>
-            )}
-          </For>
-        </div>
-      </Show>
-      <div class="section-heading">
-        <h3 class="section-label">From ChatGPT desktop</h3>
-        <button class="text-button" disabled={props.busy || !props.canImport} onClick={props.onImport}>
-          Import project list ↗
-        </button>
+            </div>
+          )}
+        </For>
       </div>
-      <Show
-        when={suggestions().length}
-        fallback={
-          <p class="hint project-hint">
-            Ask ChatGPT to import your local projects, then refresh AgentBoard. Cloud projects need a local Beads folder
-            to use this board.
-          </p>
-        }
-      >
-        <div class="project-choices">
-          <For each={suggestions()}>
-            {(project) => (
-              <button class="project-choice" disabled={props.busy} onClick={() => props.onConnect(project.directory)}>
-                <span>
-                  <strong>{project.name}</strong>
-                  <small title={project.directory}>{project.directory}</small>
-                </span>
-                <span class="project-state">Connect →</span>
-              </button>
-            )}
-          </For>
+      <Show when={props.error}>
+        <div class="project-message error" role="alert">
+          <strong>Couldn’t open this project</strong>
+          <Show when={opening()}>
+            <span class="project-error-path">{opening()}</span>
+          </Show>
+          <p>{props.error}</p>
         </div>
       </Show>
-      <form
-        class="connect-form"
-        onSubmit={(event) => {
-          event.preventDefault()
-          props.onConnect(directory().trim())
-        }}
-      >
-        <label for="folder">Connect a folder</label>
-        <input
-          id="folder"
-          placeholder="Absolute path to your project"
-          value={directory()}
-          disabled={props.busy}
-          autocomplete="off"
-          spellcheck={false}
-          required
-          onInput={(event) => setDirectory(event.currentTarget.value)}
-          onDragOver={(event) => event.preventDefault()}
-          onDrop={(event) => {
+      <details class="project-manual" open={!projects().length}>
+        <summary>Open another folder</summary>
+        <form
+          class="connect-form"
+          onSubmit={(event) => {
             event.preventDefault()
-            event.stopPropagation()
-            const transfer = event.dataTransfer
-            if (!transfer || props.busy) return
-            if (transfer.files.length && !transfer.getData("text/uri-list")) {
-              props.onError("The host did not share this folder’s path. Paste its absolute path here.")
-              return
-            }
-            void Promise.resolve()
-              .then(() =>
-                setDirectory(folderFromDrop(transfer.getData("text/uri-list") || transfer.getData("text/plain"))),
-              )
-              .catch((cause: unknown) => props.onError(cause instanceof Error ? cause.message : String(cause)))
+            open({ directory: directory().trim() })
           }}
-        />
-        <p class="hint">Paste or drop a folder path. It must already contain a Beads tracker.</p>
-        <button class="primary" disabled={props.busy || !directory().trim()}>
-          {props.busy ? "Connecting…" : "Connect project"}
-        </button>
-      </form>
-    </dialog>
+        >
+          <label for="folder">Project folder path</label>
+          <div class="project-path-form">
+            <input
+              id="folder"
+              placeholder="/path/to/project"
+              value={directory()}
+              disabled={props.busy}
+              autocomplete="off"
+              spellcheck={false}
+              required
+              onInput={(event) => setDirectory(event.currentTarget.value)}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                const transfer = event.dataTransfer
+                if (!transfer || props.busy) return
+                if (transfer.files.length && !transfer.getData("text/uri-list")) {
+                  props.onError("The host did not share this folder’s path. Paste its absolute path here.")
+                  return
+                }
+                void Promise.resolve()
+                  .then(() =>
+                    setDirectory(folderFromDrop(transfer.getData("text/uri-list") || transfer.getData("text/plain"))),
+                  )
+                  .catch((cause: unknown) => props.onError(cause instanceof Error ? cause.message : String(cause)))
+              }}
+            />
+            <button class="primary" disabled={props.busy || !directory().trim()}>
+              Open folder
+            </button>
+          </div>
+          <p class="hint">Paste or drop an absolute path. A board requires a Beads tracker in that folder.</p>
+        </form>
+      </details>
+    </section>
   )
 }

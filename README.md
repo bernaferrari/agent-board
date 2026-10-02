@@ -17,7 +17,7 @@ codex plugin marketplace add .
 codex plugin add agent-board@agentboard-desktop
 ```
 
-The `codex` command is the desktop host's plugin management CLI. The portable plugin is in `plugins/agent-board`; `.agents/plugins/marketplace.json` makes it discoverable from this repository. Restart the desktop app if the new plugin does not appear in the Plugins Directory. Open **AgentBoard Workspace** from the plugin's navigation or chat entrypoint. Open **Your projects** to choose a connected folder, import desktop paths through ChatGPT, or paste/drop an absolute folder path. Select a folder containing `.beads`, or invoke the plugin's setup skill to initialize one.
+The `codex` command is the desktop host's plugin management CLI. The portable plugin is in `plugins/agent-board`; `.agents/plugins/marketplace.json` makes it discoverable from this repository. Restart the desktop app if the new plugin does not appear in the Plugins Directory. Open **AgentBoard Workspace** from the plugin's navigation or chat entrypoint. The first screen lists your saved local project paths automatically. Search by name or path and click a project to open its board. **Open another folder** accepts a pasted or dropped absolute path. Select a folder containing `.beads`, or invoke the plugin's setup skill to initialize one.
 
 For a private portable archive:
 
@@ -25,7 +25,7 @@ For a private portable archive:
 bun run package
 ```
 
-This writes `releases/agent-board-0.1.2.zip`, including the bundled server, self-contained HTML, manifests, icon, license and workflow skills. The archive needs no dependency installation after extraction; Bun and Beads remain host prerequisites. Use the local plugin installation flow for stdio packages. Account upload by itself cannot provide a local runtime to web or mobile clients.
+This writes `releases/agent-board-0.1.3.zip`, including the bundled server, self-contained HTML, manifests, icon, license and workflow skills. The archive needs no dependency installation after extraction; Bun and Beads remain host prerequisites. Use the local plugin installation flow for stdio packages. Account upload by itself cannot provide a local runtime to web or mobile clients.
 
 ## Work with a project
 
@@ -42,7 +42,11 @@ Needs Review is represented by the `agentboard:review` label on a Beads `in_prog
 
 ## Desktop project paths
 
-The desktop agent can use its `list_projects` tool to retrieve absolute paths for local projects. The widget SDK does not expose that list directly. Click **Import project list** in Your projects to ask the active chat to collect local paths and pass them to `project_import` as `{ "paths": ["/absolute/project"] }`, then Refresh. The plugin stores only folder paths and derives display names; it does not store ChatGPT project IDs, connect folders automatically, or initialize trackers.
+The local server reads saved desktop paths automatically and returns them through `project_list` and board snapshots. The first screen is a searchable inline list, with explicit opening and failure states. **Refresh list** rereads desktop preferences. Paths are normalized and deduplicated; display names come from folder names. Listing never opens folders, scans trackers or initializes Beads.
+
+The reader is a compatibility adapter for `$CODEX_HOME/.codex-global-state.json` (default `~/.codex/.codex-global-state.json`), using only `local-projects.rootPaths`, or legacy `electron-saved-workspace-roots` when the modern collection is absent. This is a desktop preferences format, not a public SDK API, and may change with desktop updates. The preferences file is never modified; other fields are not returned or stored. Missing or malformed state leaves manual paths and connected folders available. `AGENTBOARD_DESKTOP_STATE` overrides the file for development and testing.
+
+`project_import` remains available as a fallback for agent-supplied paths from the host's `list_projects` tool. There is no import round trip in the normal UI. The plugin stores only folder paths, not ChatGPT project IDs, and connects a folder only when the user chooses it.
 
 Cloud ChatGPT projects have no local filesystem path. Projects on remote hosts are excluded. Hosts without `list_projects` can still use manual paths. A dragged folder can be used only when the host supplies its path as text or a local file URI; a browser File object alone does not reveal an absolute folder path.
 

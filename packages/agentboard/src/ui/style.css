@@ -923,69 +923,183 @@ textarea:hover {
   min-height: 44px;
 }
 .project-picker {
-  width: min(620px, calc(100vw - 32px));
-  max-height: calc(100dvh - 40px);
+  width: min(820px, calc(100% - 48px));
+  margin: 40px auto;
+  align-self: center;
 }
-.project-picker .connect-form {
-  padding-top: 22px;
-  border-top: 1px solid var(--board-line);
-  margin-bottom: 0;
+.project-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+.project-heading h2 {
+  font-size: var(--font-heading-md-size, 28px);
+  font-weight: var(--font-weight-semibold, 600);
+  letter-spacing: -0.5px;
+}
+.project-heading p {
+  margin-top: 8px;
+  color: var(--board-muted);
+  line-height: 1.5;
+}
+.project-refresh {
+  flex-shrink: 0;
+}
+.project-search {
+  width: 100%;
+  background: var(--board-surface);
+  min-height: 48px;
+}
+.project-list-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--board-muted);
+  font-size: 12px;
+  min-height: 48px;
+  font-variant-numeric: tabular-nums;
 }
 .project-choices {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 12px 0 24px;
-  max-height: 230px;
+  max-height: clamp(200px, calc(100dvh - 410px), 440px);
   overflow-y: auto;
-  padding: 4px;
+  border: 1px solid var(--board-line);
+  border-radius: var(--board-radius-lg);
+}
+.project-choices > [role="listitem"] + [role="listitem"] {
+  border-top: 1px solid var(--board-line);
 }
 .project-choice {
   display: flex;
-  justify-content: space-between;
-  text-align: left;
+  width: 100%;
   align-items: center;
-  gap: 14px;
-  padding: 12px;
+  gap: 16px;
+  padding: 16px;
+  min-height: 80px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
 }
-.project-choice > span:first-child {
+.project-folder {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: var(--board-muted);
+  stroke-width: 1.5;
+}
+.project-path {
   min-width: 0;
+  flex: 1;
 }
-.project-choice strong {
+.project-path strong {
   display: block;
+  font-size: 14px;
   font-weight: var(--font-weight-medium, 550);
 }
-.project-choice small {
+.project-path small,
+.project-error-path {
   display: block;
-  color: var(--board-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin-top: 5px;
-  font-size: 12px;
+  margin-top: 6px;
+  color: var(--board-text);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 .project-state {
-  color: var(--board-muted);
   flex-shrink: 0;
+  color: var(--board-text);
   font-size: 12px;
 }
-.section-heading {
+.project-choice:focus-visible {
+  outline-offset: -3px;
+}
+.project-opening {
+  background: var(--board-surface);
+  box-shadow: inset 3px 0 var(--board-accent);
+}
+.project-message {
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid var(--board-line);
+  border-radius: var(--board-radius-md);
+  line-height: 1.6;
+  font-size: 13px;
+  background: var(--board-surface);
+}
+.project-message.error {
+  color: var(--board-danger);
+  border-color: var(--color-border-danger, var(--board-danger));
+}
+.project-message p {
+  margin-top: 8px;
+}
+.project-list-empty {
+  padding: 40px 24px;
+  text-align: center;
+}
+.project-list-empty p {
+  color: var(--board-muted);
+  margin-top: 10px;
+  line-height: 1.5;
+}
+.project-manual {
+  margin-top: 24px;
+}
+.project-manual summary {
+  cursor: var(--cursor-interaction, pointer);
+  min-height: 44px;
+  padding: 12px 0;
+  color: var(--board-muted);
+  font-size: 13px;
+}
+.project-manual .connect-form {
+  margin: 12px 0 0;
+}
+.project-path-form {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
   gap: 10px;
 }
-.section-label {
-  color: var(--board-muted);
-  font-size: 12px;
+.project-path-form input {
+  flex: 1;
+  min-width: 0;
+}
+.project-path-form button {
+  flex-shrink: 0;
 }
 .text-button {
   background: transparent;
   border: 0;
   font-size: 12px;
 }
-.project-hint {
-  margin: 12px 0;
+.project-back {
+  margin: 0 0 20px -12px;
+}
+@media (max-width: 600px) {
+  .project-picker {
+    width: calc(100% - 32px);
+    margin: 28px auto;
+  }
+  .project-heading {
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .project-heading h2 {
+    font-size: 24px;
+  }
+  .project-heading p {
+    font-size: 13px;
+  }
+  .project-choice {
+    padding: 14px 12px;
+    gap: 10px;
+  }
+  .project-path-form {
+    flex-direction: column;
+  }
 }
 .draft-drop {
   border: 1px dashed var(--board-line);

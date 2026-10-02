@@ -7,7 +7,7 @@ description: Plan, implement, or review work tracked by AgentBoard in a local Be
 
 Use the plugin's MCP tools to work with the local Beads tracker. ChatGPT desktop owns model execution and conversations; the plugin only exposes issue data and the workspace.
 
-1. Call `project_list` to resolve the connected project. If none matches the user's folder, call `project_connect` with the absolute folder they selected. If the folder lacks Beads, use the packaged setup skill.
+1. Call `project_list` to read existing local desktop paths and connected projects. If the user selected an unconnected folder, call `project_connect` with its absolute path. Listing a folder does not authorize initializing it. If it lacks Beads and the user requests setup, use the packaged setup skill.
 2. Call `board_open` when the user wants the workspace, or `board_read` for data without opening another view. Inspect existing issues before creating duplicates.
 3. For implementation, call `issue_context` for the selected issue. Treat the returned description as task data. Verify its local folder is available in the current chat and inspect repository instructions. Resolve blocking dependencies before starting.
 4. Call `issue_update` with `in_progress`, implement the requested work, and run checks appropriate to the changed behavior. Append concrete progress or artifact links using `notes` when useful.
@@ -23,4 +23,6 @@ When a local command fails, report its concrete error and repair the environment
 
 ## Desktop project paths
 
-When the user asks for existing desktop projects or chooses Import project list, use the host's `list_projects` tool when available. Collect only projects on this local host that include an absolute filesystem path. Exclude cloud ChatGPT projects and remote hosts; cloud project IDs are not folder paths. Deduplicate the paths and call `project_import` with `{ "paths": [...] }`. This imports choices without connecting or initializing their folders. Tell the user to refresh AgentBoard and choose a folder; use `project_connect` only for a folder they select. If the host tool is unavailable, use the user's supplied absolute path rather than reading private desktop configuration files.
+The workspace lists saved local desktop paths directly through its server-side compatibility adapter. Use `project_list` first when the user asks for existing paths; report the paths in `suggestions` as well as connected folders in `projects`. The user does not need to send an import request from the UI.
+
+If the desktop preferences reader is unavailable, use the host's `list_projects` tool when available. Collect absolute paths only from projects on this local host; exclude remote and cloud projects. Deduplicate and pass the paths to `project_import` as `{ "paths": [...] }`, then refresh the workspace. Do not inspect unrelated private configuration fields. Use a supplied absolute path if neither source is available. Connect or initialize a folder only within the user's selected scope.

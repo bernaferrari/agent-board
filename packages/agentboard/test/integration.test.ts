@@ -14,7 +14,9 @@ import type { Snapshot } from "../src/types"
 const fixture = await mkdtemp(path.join(os.tmpdir(), "agentboard-test-"))
 const directory = path.join(fixture, "project")
 const store = await createStore(path.join(fixture, "data"))
-const server = createServer(store, "<!doctype html><title>AgentBoard</title>")
+const server = createServer(store, "<!doctype html><title>AgentBoard</title>", {
+  desktopState: path.join(fixture, "missing-desktop-state.json"),
+})
 const client = new Client({ name: "agentboard-integration", version: "1.0.0" })
 const transport = InMemoryTransport.createLinkedPair()
 

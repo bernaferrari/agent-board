@@ -107,8 +107,10 @@ function Workspace() {
     return success
   }
   const refresh = async () => {
-    setSnapshot(await call<Snapshot>("board_read", board() ? { projectID: board()!.project.id } : {}))
+    const value = await call<Snapshot>("board_read", board() ? { projectID: board()!.project.id } : {})
+    setSnapshot(value)
     setLoaded(true)
+    if (value.problem) setError(value.problem)
   }
   const update = async (issueID: string, status: string) => {
     if (!board() || allCards().find((item) => item.issue.id === issueID)?.column === status) return
@@ -159,7 +161,10 @@ function Workspace() {
       setLoaded(true)
     },
   )
-    .then(() => setReady(true))
+    .then(() => {
+      setReady(true)
+      return perform(refresh)
+    })
     .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)))
   const interval = setInterval(() => {
     if (
@@ -168,6 +173,7 @@ function Workspace() {
       busy() ||
       background.pending ||
       dragID() ||
+      choosingProject() ||
       draft() ||
       selected() ||
       document.visibilityState !== "visible"
@@ -296,16 +302,18 @@ function Workspace() {
           </button>
         </Show>
         <div class="toolbar-spacer" />
-        <button disabled={!ready() || busy()} onClick={() => void perform(refresh)}>
-          {busy() ? "Updating…" : "Refresh"}
-        </button>
-        <Show when={board()}>
+        <Show when={board() && !choosingProject()}>
+          <button disabled={!ready() || busy()} onClick={() => void perform(refresh)}>
+            {busy() ? "Updating…" : "Refresh"}
+          </button>
+        </Show>
+        <Show when={board() && !choosingProject()}>
           <button class="primary" disabled={busy()} title="New issue (N)" onClick={() => openDraft()}>
             + New issue
           </button>
         </Show>
       </header>
-      <Show when={error()}>
+      <Show when={error() && (!ready() || (board() && !choosingProject()))}>
         <div class="banner error" role="alert">
           <span>{error()}</span>
           <button aria-label="Dismiss error" onClick={() => setError("")}>
@@ -332,17 +340,32 @@ function Workspace() {
         }
       >
         <Show
-          when={board()}
+          when={board() && !choosingProject()}
           fallback={
-            <div class="empty">
-              <span class="empty-icon">▦</span>
-              <h2>Bring your project into focus</h2>
-              <p>Connect a local folder with a Beads tracker to plan work and hand issues to ChatGPT.</p>
-              <button class="primary empty-action" disabled={busy()} onClick={openProjects}>
-                Choose a project
-              </button>
-              <p class="hint">Use a connected folder, import desktop paths, or paste a new path.</p>
-            </div>
+            <ProjectPicker
+              snapshot={snapshot()}
+              busy={busy()}
+              error={error()}
+              onClose={() => setChoosingProject(false)}
+              onError={setError}
+              onConnect={(directory) =>
+                void perform(async () => {
+                  setSnapshot(await call<Snapshot>("project_connect", { directory }))
+                  clearFilters()
+                  setChoosingProject(false)
+                  setSelected(undefined)
+                })
+              }
+              onSelect={(projectID) =>
+                void perform(async () => {
+                  setSnapshot(await call<Snapshot>("board_read", { projectID }))
+                  clearFilters()
+                  setChoosingProject(false)
+                  setSelected(undefined)
+                })
+              }
+              onRefresh={() => void perform(refresh)}
+            />
           }
         >
           <nav class="view-toolbar" aria-label="Board views">
@@ -815,42 +838,6 @@ function Workspace() {
             void perform(async () => {
               await send(planningPrompt(board()!.project, `${draft()!.title}\n${draft()!.description}`), "new")
               setDraft(undefined)
-            })
-          }
-        />
-      </Show>
-      <Show when={choosingProject()}>
-        <ProjectPicker
-          snapshot={snapshot()}
-          busy={busy()}
-          error={error()}
-          canImport={ready()}
-          onClose={() => setChoosingProject(false)}
-          onError={setError}
-          onConnect={(directory) =>
-            void perform(async () => {
-              setSnapshot(await call<Snapshot>("project_connect", { directory }))
-              clearFilters()
-              setChoosingProject(false)
-              setSelected(undefined)
-            })
-          }
-          onSelect={(projectID) =>
-            void perform(async () => {
-              setSnapshot(await call<Snapshot>("board_read", { projectID }))
-              clearFilters()
-              setChoosingProject(false)
-              setSelected(undefined)
-            })
-          }
-          onImport={() =>
-            void perform(async () => {
-              await send(
-                "Import my desktop project folder paths into AgentBoard. Use the host list_projects tool if available. Keep only absolute local paths on this host; exclude remote and cloud ChatGPT projects. Call AgentBoard project_import with the deduplicated paths array. Do not connect or initialize any folder. Tell me to refresh AgentBoard when done.",
-                "active",
-              )
-              setChoosingProject(false)
-              setNotice("Asked ChatGPT to import your local paths. Refresh after it finishes.")
             })
           }
         />

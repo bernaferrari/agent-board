@@ -37,6 +37,7 @@ export type Snapshot = {
   suggestions: ProjectSuggestion[]
   board: AgentBoardBoard | null
   problem?: string
+  projectProblem?: string
 }
 export const COLUMN_TITLES = {
   open: "Open",

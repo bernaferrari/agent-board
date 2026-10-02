@@ -2,7 +2,7 @@ import { App, applyDocumentTheme, applyHostFonts, applyHostStyleVariables } from
 import { OpenAIExtensions } from "@openai/mcp-extensions/app"
 import type { Snapshot } from "../types"
 
-export const app = new App({ name: "AgentBoard", version: "0.1.2" }, { availableDisplayModes: ["fullscreen"] })
+export const app = new App({ name: "AgentBoard", version: "0.1.3" }, { availableDisplayModes: ["fullscreen"] })
 export const extensions = new OpenAIExtensions(app)
 
 export async function connect(onSnapshot: (snapshot: Snapshot) => void, onError: (message: string) => void) {
@@ -32,7 +32,7 @@ export async function connect(onSnapshot: (snapshot: Snapshot) => void, onError:
     app.getHostContext()?.displayMode === "inline" &&
     app.getHostContext()?.availableDisplayModes?.includes("fullscreen")
   )
-    await app.requestDisplayMode({ mode: "fullscreen" })
+    void app.requestDisplayMode({ mode: "fullscreen" }).catch(() => undefined)
 }
 
 export async function call<T>(name: string, args: Record<string, unknown> = {}) {
