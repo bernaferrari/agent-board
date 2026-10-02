@@ -150,22 +150,32 @@ function Workspace() {
     if (!extensions.modelContext) await app.updateModelContext({ content })
     setNotice("Issue attached to the chat. Send your message when you’re ready.")
   }
-  connect(
-    (value) => {
-      setSnapshot(value)
-      setLoaded(true)
-      if (value.problem) setError(value.problem)
-    },
-    (message) => {
-      setError(message)
-      setLoaded(true)
-    },
-  )
-    .then(() => {
-      setReady(true)
-      return perform(refresh)
-    })
-    .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)))
+  const start = () =>
+    connect(
+      (value) => {
+        setSnapshot(value)
+        setLoaded(true)
+        if (value.problem) setError(value.problem)
+      },
+      (message) => {
+        setError(message)
+        setLoaded(true)
+      },
+    )
+      .then(() => {
+        setReady(true)
+        if (loaded()) return
+        return perform(refresh)
+      })
+      .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)))
+  void start()
+  const retry = async () => {
+    if (busy()) return
+    setError("")
+    if (ready()) return perform(refresh)
+    await app.close()
+    return start()
+  }
   const interval = setInterval(() => {
     if (
       !ready() ||
@@ -313,7 +323,7 @@ function Workspace() {
           </button>
         </Show>
       </header>
-      <Show when={error() && (!ready() || (board() && !choosingProject()))}>
+      <Show when={error() && ready() && loaded() && board() && !choosingProject()}>
         <div class="banner error" role="alert">
           <span>{error()}</span>
           <button aria-label="Dismiss error" onClick={() => setError("")}>
@@ -331,11 +341,12 @@ function Workspace() {
         fallback={
           <div class="empty">
             <h2>{error() ? "AgentBoard couldn’t load" : "Loading your workspace…"}</h2>
-            <p>
-              {error()
-                ? "Reopen AgentBoard from its workspace entrypoint, or refresh if the connection is ready."
-                : "Connecting to your local projects and Beads tracker."}
-            </p>
+            <p>{error() || "Connecting to your local projects and Beads tracker."}</p>
+            <Show when={error()}>
+              <button class="primary" disabled={busy()} onClick={() => void retry()}>
+                Retry loading
+              </button>
+            </Show>
           </div>
         }
       >

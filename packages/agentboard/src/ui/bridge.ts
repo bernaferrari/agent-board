@@ -1,32 +1,23 @@
 import { App, applyDocumentTheme, applyHostFonts, applyHostStyleVariables } from "@modelcontextprotocol/ext-apps"
 import { OpenAIExtensions } from "@openai/mcp-extensions/app"
 import type { Snapshot } from "../types"
+import { readSnapshot, readToolData } from "./tool-result"
 
-export const app = new App({ name: "AgentBoard", version: "0.1.3" }, { availableDisplayModes: ["fullscreen"] })
+export const app = new App({ name: "AgentBoard", version: "0.1.4" }, { availableDisplayModes: ["fullscreen"] })
 export const extensions = new OpenAIExtensions(app)
 
 export async function connect(onSnapshot: (snapshot: Snapshot) => void, onError: (message: string) => void) {
   app.ontoolresult = (result) => {
-    if (result.isError) {
-      onError(
-        result.content
-          ?.filter((item) => item.type === "text")
-          .map((item) => item.text)
-          .join("\n") || "Could not load the board.",
-      )
-      return
+    try {
+      const data = readToolData(result)
+      if ("projects" in data && "board" in data) onSnapshot(readSnapshot(data))
+    } catch (cause) {
+      onError(cause instanceof Error ? cause.message : String(cause))
     }
-    if (result.structuredContent && "projects" in result.structuredContent && "board" in result.structuredContent)
-      onSnapshot(result.structuredContent as Snapshot)
   }
-  const theme = () => {
-    const context = app.getHostContext()
-    if (context?.theme) applyDocumentTheme(context.theme)
-    if (context?.styles?.variables) applyHostStyleVariables(context.styles.variables)
-    if (context?.styles?.css?.fonts) applyHostFonts(context.styles.css.fonts)
-  }
-  app.addEventListener("hostcontextchanged", theme)
-  await app.connect()
+  await app.connect(undefined, { timeout: 10000 }).catch((cause: unknown) => {
+    throw requestError(cause, "ChatGPT didn’t finish connecting. Retry loading to reconnect.")
+  })
   theme()
   if (
     app.getHostContext()?.displayMode === "inline" &&
@@ -36,16 +27,35 @@ export async function connect(onSnapshot: (snapshot: Snapshot) => void, onError:
 }
 
 export async function call<T>(name: string, args: Record<string, unknown> = {}) {
-  const result = await app.callServerTool({ name, arguments: args })
-  if (result.isError)
-    throw new Error(
-      result.content
-        ?.filter((item) => item.type === "text")
-        .map((item) => item.text)
-        .join("\n") || "The action failed. Refresh and try again.",
-    )
-  return result.structuredContent as T
+  const data = readToolData(
+    await app
+      .callServerTool(
+        { name, arguments: args },
+        { timeout: name === "board_read" || name === "project_list" ? 15000 : 65000 },
+      )
+      .catch((cause: unknown) => {
+        throw requestError(cause, "ChatGPT didn’t return the result in time. Refresh before trying the action again.")
+      }),
+  )
+  return (
+    ["board_open", "board_read", "project_connect", "issue_create", "issue_update", "dependency_update"].includes(name)
+      ? readSnapshot(data)
+      : data
+  ) as T
 }
+
+function requestError(cause: unknown, timeout: string) {
+  if (cause instanceof Error && "code" in cause && cause.code === -32001) return new Error(timeout)
+  return cause instanceof Error ? cause : new Error(String(cause))
+}
+
+function theme() {
+  const context = app.getHostContext()
+  if (context?.theme) applyDocumentTheme(context.theme)
+  if (context?.styles?.variables) applyHostStyleVariables(context.styles.variables)
+  if (context?.styles?.css?.fonts) applyHostFonts(context.styles.css.fonts)
+}
+app.addEventListener("hostcontextchanged", theme)
 
 export async function send(prompt: string, target: "active" | "new") {
   if (extensions.message) {

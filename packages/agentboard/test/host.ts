@@ -75,8 +75,16 @@ const bridge = new AppBridge(
   },
 )
 
+const calls = { read: 0, handshake: 0 }
 async function tool(params: Record<string, unknown>) {
-  return CallToolResultSchema.parse(
+  if (params.name === "board_read") {
+    calls.read += 1
+    const failure = new URLSearchParams(location.search).get("toolFailure")
+    if (failure === "always" || (failure === "once" && calls.read === 1))
+      return { content: [{ type: "text" as const, text: "Test host cannot read the workspace." }], isError: true }
+    if (new URLSearchParams(location.search).has("stallTool")) await new Promise(() => {})
+  }
+  const result = CallToolResultSchema.parse(
     await (
       await fetch("/tool", {
         method: "POST",
@@ -85,6 +93,9 @@ async function tool(params: Record<string, unknown>) {
       })
     ).json(),
   )
+  if (new URLSearchParams(location.search).has("emptyResult")) return { content: [] }
+  if (new URLSearchParams(location.search).has("textOnly")) return { ...result, structuredContent: undefined }
+  return result
 }
 bridge.oncalltool = tool
 bridge.onmessage = async (params) => {
@@ -104,6 +115,11 @@ const transport = new PostMessageTransport(frame.contentWindow!, frame.contentWi
 await bridge.connect(transport)
 const forward = transport.onmessage
 transport.onmessage = (message, extra) => {
+  if ("method" in message && message.method === "ui/initialize") {
+    calls.handshake += 1
+    const stall = new URLSearchParams(location.search).get("stallHandshake")
+    if (stall === "1" || (stall === "once" && calls.handshake === 1)) return
+  }
   if ("method" in message && message.method === "ui/message")
     void fetch("/capture", { method: "POST", body: JSON.stringify({ kind: "wire-message", params: message.params }) })
   forward?.(message, extra)

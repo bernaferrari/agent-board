@@ -14,7 +14,9 @@ The plugin's SQLite database stores connected project folders, imported local pa
 
 ## ChatGPT host integration
 
-The official MCP Apps SDK connects the UI to server tools and model context. The OpenAI Extensions SDK provides global and thread entrypoints, fullscreen display preferences, theme styling, issue attachments and new-conversation message targeting. The UI registers its initial tool-result listener before connecting and also requests `board_read` after the handshake, so a missing initial result cannot strand the first screen. A fullscreen preference request does not block data loading. Refresh uses the data-only `board_read` tool.
+The official MCP Apps SDK connects the UI to server tools and model context. The OpenAI Extensions SDK provides global and thread entrypoints, fullscreen display preferences, theme styling, issue attachments and new-conversation message targeting. The UI registers its initial tool-result listener before connecting and requests `board_read` after the handshake only when no initial result arrived. A fullscreen preference request does not block data loading. Refresh uses the data-only `board_read` tool.
+
+The UI decodes structured responses or their JSON text fallback and validates snapshots before replacing reactive state. Missing or malformed payloads become recoverable errors instead of crashing while the loading screen is mounted. The handshake times out after 10 seconds; initial and refresh reads time out after 15 seconds. Retry loading reconnects a failed handshake or retries a failed read. Mutating tool requests retain a longer timeout and are never retried automatically.
 
 A handoff reads the current issue and prepares a prompt containing its local project, acceptance context and review workflow. Clicking Work in new chat sends that prompt through `ui/message` with `openai/message.target = new`. It does not change the issue status or claim execution has begun. The receiving chat verifies project availability before implementation. Attach to chat updates model context without sending.
 

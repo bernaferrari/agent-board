@@ -34,7 +34,7 @@ const write = {
 }
 
 export function createServer(store: Store, html: string, options: { desktopState?: string } = {}) {
-  const server = new McpServer({ name: "agent-board", version: "0.1.3" })
+  const server = new McpServer({ name: "agent-board", version: "0.1.4" })
   new OpenAIExtensions(server)
   const projectChoices = async () => {
     const desktop = await readDesktopProjects(options.desktopState)
