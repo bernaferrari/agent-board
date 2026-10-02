@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
-import { mkdir, mkdtemp, rm } from "node:fs/promises"
+import { mkdir, mkdtemp, rename, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
@@ -137,8 +137,49 @@ describe("local MCP plugin with real Beads", () => {
     expect((await call("board_read", { projectID })).board!.graph.positions).toEqual([
       { issueID: dependent, x: 200, y: 350 },
     ])
+    const edited = await call("issue_update", {
+      projectID,
+      issueID: foundation,
+      title: "Updated foundation",
+      priority: 0,
+      type: "chore",
+    })
+    const updated = edited
+      .board!.columns.flatMap((column) => column.cards)
+      .find((item) => item.issue.id === foundation)!
+    expect(updated.issue.title).toBe("Updated foundation")
+    expect(updated.issue.priority).toBe(0)
+    expect(updated.issue.raw.issue_type).toBe("chore")
     expect(await runBd(directory, ["list", "--all", "--limit", "0", "--tree=false"])).toHaveLength(2)
   }, 60000)
+
+  test("imports only path choices without connecting or scanning folders", async () => {
+    const candidate = path.join(fixture, "not-connected")
+    const imported = await call("project_import", { paths: [candidate, candidate, directory] })
+    expect(imported.projects).toHaveLength(1)
+    expect(imported.suggestions).toHaveLength(2)
+    expect(imported.suggestions).toContainEqual({ name: "not-connected", directory: candidate })
+    const invalid = await client.callTool({ name: "project_import", arguments: { paths: ["relative/folder"] } })
+    expect(invalid.isError).toBe(true)
+    expect(store.suggestions()).toHaveLength(2)
+    expect((await call("board_read")).board!.project.id).toBe(store.selected()!)
+    await mkdir(candidate)
+    expect((await client.callTool({ name: "project_connect", arguments: { directory: candidate } })).isError).toBe(true)
+    expect(store.list()).toHaveLength(1)
+    await call("project_import", { paths: [] })
+    expect(store.suggestions()).toHaveLength(0)
+  })
+
+  test("an unavailable project still opens the picker with a visible error", async () => {
+    const project = store.list()[0]
+    await rename(directory, `${directory}-offline`)
+    const opened = await call("board_open", { projectID: project.id })
+    await rename(`${directory}-offline`, directory)
+    expect(opened.board).toBeNull()
+    expect(opened.projects[0].id).toBe(project.id)
+    expect(opened.problem).toBeTruthy()
+    expect((await call("board_read", { projectID: project.id })).board!.project.id).toBe(project.id)
+  })
 
   test("rejects relative folders, unregistered projects and CLI option injection", async () => {
     expect(

@@ -2,6 +2,7 @@ import { z } from "zod"
 
 export const Status = z.enum(["open", "in_progress", "needs_review", "closed"])
 export type AgentBoardColumnID = z.infer<typeof Status>
+export const IssueType = z.enum(["task", "bug", "feature", "epic", "chore", "decision"])
 export const Issue = z
   .object({
     id: z.string().min(1),
@@ -23,6 +24,7 @@ export type AgentBoardDependency = {
 }
 export type AgentBoardCard = { issue: BeadsIssue; column: AgentBoardColumnID }
 export type Project = { id: string; name: string; directory: string }
+export type ProjectSuggestion = { name: string; directory: string }
 export type Position = { issueID: string; x: number; y: number }
 export type AgentBoardBoard = {
   project: Project
@@ -30,7 +32,12 @@ export type AgentBoardBoard = {
   columns: { id: AgentBoardColumnID; title: string; cards: AgentBoardCard[] }[]
   graph: { dependencies: AgentBoardDependency[]; positions: Position[] }
 }
-export type Snapshot = { projects: Project[]; board: AgentBoardBoard | null }
+export type Snapshot = {
+  projects: Project[]
+  suggestions: ProjectSuggestion[]
+  board: AgentBoardBoard | null
+  problem?: string
+}
 export const COLUMN_TITLES = {
   open: "Open",
   in_progress: "In Progress",

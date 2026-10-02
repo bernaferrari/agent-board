@@ -15,7 +15,7 @@ codex plugin marketplace add .
 codex plugin add agent-board@agentboard-desktop
 ```
 
-The `codex` command is the desktop host's plugin management CLI. The portable plugin is in `plugins/agent-board`; `.agents/plugins/marketplace.json` makes it discoverable from this repository. Restart the desktop app if the new plugin does not appear in the Plugins Directory. Open **AgentBoard Workspace** from the plugin's navigation or chat entrypoint. Select a local folder containing `.beads`, or invoke the plugin's setup skill to initialize one.
+The `codex` command is the desktop host's plugin management CLI. The portable plugin is in `plugins/agent-board`; `.agents/plugins/marketplace.json` makes it discoverable from this repository. Restart the desktop app if the new plugin does not appear in the Plugins Directory. Open **AgentBoard Workspace** from the plugin's navigation or chat entrypoint. Open **Your projects** to choose a connected folder, import desktop paths through ChatGPT, or paste/drop an absolute folder path. Select a folder containing `.beads`, or invoke the plugin's setup skill to initialize one.
 
 For a private portable archive:
 
@@ -23,18 +23,26 @@ For a private portable archive:
 bun run package
 ```
 
-This writes `releases/agent-board-0.1.0.zip`, including the bundled server, self-contained HTML, manifests, icon, license and workflow skills. The archive needs no dependency installation after extraction; Bun and Beads remain host prerequisites. Use the local plugin installation flow for stdio packages. Account upload by itself cannot provide a local runtime to web or mobile clients.
+This writes `releases/agent-board-0.1.1.zip`, including the bundled server, self-contained HTML, manifests, icon, license and workflow skills. The archive needs no dependency installation after extraction; Bun and Beads remain host prerequisites. Use the local plugin installation flow for stdio packages. Account upload by itself cannot provide a local runtime to web or mobile clients.
 
 ## Work with a project
 
-- **Create** issues with acceptance criteria, type and priority. **Plan in ChatGPT** sends the goal to a new chat for discussion.
+- **Create and edit** issues with acceptance criteria, type and priority. Press **N** for a new issue and **/** to search; Cmd/Ctrl+Enter saves a draft. **Plan in ChatGPT** sends the goal to a new chat for discussion.
 - **Move** cards through Open → In Progress → Needs Review → Closed by dragging or using the issue drawer's status selector. Unresolved blockers prevent starting work.
 - **Inspect** descriptions, dependencies, notes and timestamps in the drawer. Add or remove prerequisites there.
 - **Attach to chat** supplies issue context without sending a message. **Work in new chat** uses ChatGPT's message extension and sends the handoff prompt when clicked. The new chat verifies the local project before implementation.
-- **Graph** shows prerequisites pointing to dependents. Scroll to pan, change zoom, drag nodes, and retain the saved layout across restarts.
+- **Graph** shows prerequisites pointing to dependents. Scroll to pan, fit the graph, drag nodes or use Shift+arrow keys, and retain the saved layout across restarts.
+- **Drop a brief** onto the board or draft: plain text and one `.md`/`.txt` file fill a reviewable draft. Choose file provides the same import without dragging. Drops never create issues automatically. Dropping into a populated draft appends context and keeps its existing fields.
+- **List** supports direct status changes. Sort by priority, update time or title, and hide closed issues in any view.
 - Changes made through `bd` are picked up by Refresh or the visible board's 15-second refresh.
 
 Needs Review is represented by the `agentboard:review` label on a Beads `in_progress` issue. Moving to another column removes that label. This keeps the workflow compatible with Beads' standard statuses. Completion is explicit; the plugin does not infer success from a chat ending.
+
+## Desktop project paths
+
+The desktop agent can use its `list_projects` tool to retrieve absolute paths for local projects. The widget SDK does not expose that list directly. Click **Import project list** in Your projects to ask the active chat to collect local paths and pass them to `project_import` as `{ "paths": ["/absolute/project"] }`, then Refresh. The plugin stores only folder paths and derives display names; it does not store ChatGPT project IDs, connect folders automatically, or initialize trackers.
+
+Cloud ChatGPT projects have no local filesystem path. Projects on remote hosts are excluded. Hosts without `list_projects` can still use manual paths. A dragged folder can be used only when the host supplies its path as text or a local file URI; a browser File object alone does not reveal an absolute folder path.
 
 ## Development and verification
 

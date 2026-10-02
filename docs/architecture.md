@@ -10,7 +10,7 @@ ChatGPT desktop starts the plugin's bundled Bun stdio process from `mcp.json`. P
 
 Beads remains authoritative for issue data. The board reads the complete issue list and batch-loads details because list results contain dependency counts rather than edges. The original dependent-to-prerequisite edge representation is preserved, while visual arrows point from prerequisite to dependent. Open, In Progress, Needs Review and Closed remain the four visible columns. Blocked/deferred issues are visible in Open; blocked work cannot start. Needs Review is an explicit Beads label.
 
-The plugin's SQLite database stores only connected project folders and graph positions. It resides in host-provided `PLUGIN_DATA`, or `AGENTBOARD_DATA_DIR` for direct development runs, falling back to `~/.agentboard`. Issue notes and artifact links belong in Beads notes. No OpenCode run tables or session history are migrated, and an existing Beads tracker is reused without initialization or schema changes.
+The plugin's SQLite database stores connected project folders, imported local path suggestions, the last selected project, and graph positions. It resides in host-provided `PLUGIN_DATA`, or `AGENTBOARD_DATA_DIR` for direct development runs, falling back to `~/.agentboard`. Issue notes and artifact links belong in Beads notes. No OpenCode run tables or session history are migrated, and an existing Beads tracker is reused without initialization or schema changes.
 
 ## ChatGPT host integration
 
@@ -19,6 +19,10 @@ The official MCP Apps SDK connects the UI to server tools and model context. The
 A handoff reads the current issue and prepares a prompt containing its local project, acceptance context and review workflow. Clicking Work in new chat sends that prompt through `ui/message` with `openai/message.target = new`. It does not change the issue status or claim execution has begun. The receiving chat verifies project availability before implementation. Attach to chat updates model context without sending.
 
 The local stdio runtime makes this a desktop-local plugin. The portable plugin format does not supply an enforceable “ChatGPT-only” flag; other compatible desktop clients may also load it. The product and skills target ChatGPT desktop, while web/mobile clients cannot run its local process. No undocumented platform restriction is invented.
+
+The project picker uses an agent-mediated bridge: the desktop agent reads `list_projects` and passes local paths to `project_import`. The widget never reads desktop configuration files or calls an undocumented host API. Importing choices is separate from connecting a folder; no filesystem reads occur until the user chooses a path. The opener preserves access to the picker and shows an explicit error if the last selected project cannot be loaded.
+
+External text/Markdown drops are parsed locally into a draft, with file count, size and text limits. They need an explicit Create action before any Beads mutation. Native card drops change status through the same tool used by the list and drawer. Graph nodes retain their DOM identity while dragging so pointer capture survives coordinate updates; failed layout saves restore the persisted positions.
 
 ## Removed runtime
 

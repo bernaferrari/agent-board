@@ -10,7 +10,7 @@ import { runBd, showIssue } from "./beads"
 import { issuePrompt } from "./prompts"
 import { createStore } from "./store"
 import type { Store } from "./store"
-import { REVIEW_LABEL, Status } from "./types"
+import { IssueType, REVIEW_LABEL, Status } from "./types"
 
 const URI = "ui://agent-board/workspace"
 const identity = z
@@ -33,14 +33,25 @@ const write = {
 }
 
 export function createServer(store: Store, html: string) {
-  const server = new McpServer({ name: "agent-board", version: "0.1.0" })
+  const server = new McpServer({ name: "agent-board", version: "0.1.1" })
   new OpenAIExtensions(server)
-  const snapshot = async (id?: string) => {
+  const snapshot = async (id?: string, recover = false) => {
     const projects = store.list()
-    const selected = id ?? projects[0]?.id
+    const selected = id ?? store.selected() ?? projects[0]?.id
+    const project = selected ? store.get(selected) : undefined
+    const result = project
+      ? await loadBoard(project, store.positions(project.id))
+          .then((board) => ({ board }))
+          .catch((cause: unknown) => {
+            if (!recover) throw cause
+            return { board: null, problem: cause instanceof Error ? cause.message : String(cause) }
+          })
+      : { board: null }
+    if (result.board) store.select(result.board.project.id)
     return {
       projects,
-      board: selected ? await loadBoard(store.get(selected), store.positions(selected)) : null,
+      suggestions: store.suggestions(),
+      ...result,
     }
   }
 
@@ -75,7 +86,22 @@ export function createServer(store: Store, html: string) {
         "openai/ui": { entrypoints: [{ type: "global" }, { type: "thread" }] },
       },
     },
-    async (input) => response(await snapshot(input.projectID)),
+    async (input) => response(await snapshot(input.projectID, true)),
+  )
+
+  server.registerTool(
+    "project_import",
+    {
+      title: "Import desktop project choices",
+      description:
+        "Save local project choices returned by the desktop host's list_projects tool. Include only projects on this local host with absolute folder paths; exclude cloud ChatGPT projects and remote hosts. Does not connect, scan, or initialize their trackers. The user chooses a folder in AgentBoard before connecting.",
+      inputSchema: { paths: z.array(z.string().trim().min(1).max(4096)).max(200) },
+      annotations: write,
+    },
+    async (input) => {
+      store.importProjects(input.paths)
+      return response({ projects: store.list(), suggestions: store.suggestions() })
+    },
   )
 
   server.registerTool(
@@ -142,7 +168,7 @@ export function createServer(store: Store, html: string) {
         title: z.string().trim().min(1).max(500),
         description: z.string().max(50000).optional(),
         priority: z.number().int().min(0).max(4).default(2),
-        type: z.enum(["task", "bug", "feature", "epic"]).default("task"),
+        type: IssueType.default("task"),
       },
       annotations: write,
     },
@@ -176,6 +202,7 @@ export function createServer(store: Store, html: string) {
         description: z.string().max(50000).optional(),
         priority: z.number().int().min(0).max(4).optional(),
         notes: z.string().max(50000).optional(),
+        type: IssueType.optional(),
       },
       annotations: write,
     },
@@ -199,6 +226,7 @@ export function createServer(store: Store, html: string) {
       if (input.description !== undefined) args.push("--description", input.description)
       if (input.priority !== undefined) args.push("--priority", String(input.priority))
       if (input.notes !== undefined) args.push("--append-notes", input.notes)
+      if (input.type !== undefined) args.push("--type", input.type)
       if (args.length === 2) throw new Error("Choose at least one field to update.")
       await runBd(project.directory, args)
       return response(await snapshot(project.id))
@@ -262,7 +290,9 @@ function response(data: Record<string, unknown>) {
 }
 
 if (import.meta.main) {
-  const store = await createStore(Bun.env.PLUGIN_DATA ?? Bun.env.AGENTBOARD_DATA_DIR ?? path.join(homedir(), ".agentboard"))
+  const store = await createStore(
+    Bun.env.PLUGIN_DATA ?? Bun.env.AGENTBOARD_DATA_DIR ?? path.join(homedir(), ".agentboard"),
+  )
   if (Bun.env.AGENTBOARD_PROJECT_DIRECTORY) await store.connect(Bun.env.AGENTBOARD_PROJECT_DIRECTORY)
   const server = createServer(store, await Bun.file(new URL("./board.html", import.meta.url)).text())
   await server.connect(new StdioServerTransport())

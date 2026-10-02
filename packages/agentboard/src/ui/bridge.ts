@@ -2,7 +2,7 @@ import { App, applyDocumentTheme, applyHostStyleVariables } from "@modelcontextp
 import { OpenAIExtensions } from "@openai/mcp-extensions/app"
 import type { Snapshot } from "../types"
 
-export const app = new App({ name: "AgentBoard", version: "0.1.0" }, { availableDisplayModes: ["fullscreen"] })
+export const app = new App({ name: "AgentBoard", version: "0.1.1" }, { availableDisplayModes: ["fullscreen"] })
 export const extensions = new OpenAIExtensions(app)
 
 export async function connect(onSnapshot: (snapshot: Snapshot) => void, onError: (message: string) => void) {

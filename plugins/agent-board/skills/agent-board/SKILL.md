@@ -20,3 +20,7 @@ Selecting or attaching an issue provides context. It does not start work or auth
 The four columns are Open, In Progress, Needs Review and Closed. Needs Review is an `agentboard:review` label on an in-progress Beads issue. Keep that label synchronized through `issue_update`; no plugin runner or inferred chat-completion state exists.
 
 When a local command fails, report its concrete error and repair the environment when authorized. A failed or missing connection is not an empty board. Do not substitute an API key, cloud agent, or web server for the user's local desktop workflow.
+
+## Desktop project paths
+
+When the user asks for existing desktop projects or chooses Import project list, use the host's `list_projects` tool when available. Collect only projects on this local host that include an absolute filesystem path. Exclude cloud ChatGPT projects and remote hosts; cloud project IDs are not folder paths. Deduplicate the paths and call `project_import` with `{ "paths": [...] }`. This imports choices without connecting or initializing their folders. Tell the user to refresh AgentBoard and choose a folder; use `project_connect` only for a folder they select. If the host tool is unavailable, use the user's supplied absolute path rather than reading private desktop configuration files.
