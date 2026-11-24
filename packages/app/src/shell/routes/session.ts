@@ -6,6 +6,10 @@ export function sessionHref(server: ServerConnection.Key, sessionID: string) {
   return `/server/${base64Encode(server)}/session/${sessionID}`
 }
 
+export function agentBoardHref(server: ServerConnection.Key, directory: string) {
+  return `/server/${base64Encode(server)}/board/${base64Encode(directory)}`
+}
+
 export function requireServerKey(segment: string | undefined) {
   const key = decode64(segment)
 

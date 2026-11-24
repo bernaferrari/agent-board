@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { Schema } from "effect"
+import { agentBoardHref } from "@/shell/routes/session"
 import { ServerConnection } from "@/runtime/server/registry"
 import { Persistence } from "@/runtime/persistence/schema"
 import { currentRoute, initialLayout, layoutPersistence, layoutSchema } from "./layout"
@@ -9,6 +10,12 @@ import { ServerScope, SessionRouteKey, SessionStateKey } from "@/runtime/server/
 
 test.each(["settings", "connect"] as const)("%s has its own layout route", (type) => {
   expect(currentRoute(`/${type}`, "")).toEqual({ type })
+})
+
+test("keeps the server and directory in the AgentBoard layout route", () => {
+  const server = ServerConnection.Key.make("http://127.0.0.1:4096")
+  const directory = "/workspaces/project with spaces"
+  expect(currentRoute(agentBoardHref(server, directory), "")).toEqual({ type: "agentboard", server, directory })
 })
 
 describe("layout persistence", () => {
@@ -156,7 +163,8 @@ test("a layout key is open while a shell tab shows or routes its session on the 
   const local = ServerConnection.Key.make("sidecar")
   const remote = ServerConnection.Key.make("https://remote.example")
   const scope = (server: ServerConnection.Key) => ServerScope.fromServerKey(server)
-  const key = (server: ServerConnection.Key, session?: string) => SessionStateKey.from(scope(server), SessionRouteKey.fromRoute("L3Byb2plY3Q", session))
+  const key = (server: ServerConnection.Key, session?: string) =>
+    SessionStateKey.from(scope(server), SessionRouteKey.fromRoute("L3Byb2plY3Q", session))
 
   const tabs = [
     { type: "session" as const, server: local, sessionId: "ses_shown" },
@@ -164,6 +172,10 @@ test("a layout key is open while a shell tab shows or routes its session on the 
     { type: "draft" as const, draftID: "draft", server: local, directory: "/project" },
   ]
 
-  expect(["ses_shown", "ses_parent", "ses_child", "ses_closed", undefined].map((session) => sessionKeyOpen(key(local, session), tabs, scope))).toEqual([true, true, true, false, false])
+  expect(
+    ["ses_shown", "ses_parent", "ses_child", "ses_closed", undefined].map((session) =>
+      sessionKeyOpen(key(local, session), tabs, scope),
+    ),
+  ).toEqual([true, true, true, false, false])
   expect(sessionKeyOpen(key(remote, "ses_shown"), tabs, scope)).toBe(false)
 })

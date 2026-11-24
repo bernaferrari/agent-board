@@ -1,3 +1,5 @@
+import { useNavigate } from "@solidjs/router"
+import { agentBoardHref } from "@/shell/routes/session"
 import { useDirectoryPicker } from "@/workspaces/selection/picker"
 import { useServerActionsController } from "@/servers/registry/controller"
 import { useSettingsCommand } from "@/settings/command"
@@ -19,6 +21,7 @@ export const HomeServersSchema = Schema.Struct({
 
 export function createHomeProjectsController(home: HomeController) {
   const platform = usePlatform()
+  const navigate = useNavigate()
 
   const pickDirectory = useDirectoryPicker()
 
@@ -100,6 +103,13 @@ export function createHomeProjectsController(home: HomeController) {
       reveal: actions.reveal,
     },
     utility: {
+      agentBoard: () => {
+        const connection = home.server.focused()
+        const project = home.project.newSession()
+        return connection && project && !isServerFailed(home.server.health(connection))
+          ? () => navigate(agentBoardHref(ServerConnection.key(connection), project.worktree))
+          : undefined
+      },
       settings: openSettings,
       help: () => platform.openExternal("https://opencode.ai/desktop-feedback"),
     },

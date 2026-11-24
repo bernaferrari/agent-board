@@ -212,5 +212,7 @@ function sameRoute(a: LayoutRoute, b: LayoutRoute) {
 
   if (a.type === "session") return b.type === "session" && a.server === b.server && a.sessionId === b.sessionId
 
+  if (a.type === "agentboard") return b.type === "agentboard" && a.server === b.server && a.directory === b.directory
+
   return a.type === b.type
 }

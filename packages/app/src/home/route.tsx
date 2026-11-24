@@ -136,6 +136,7 @@ export function HomeView(props: {
       <div class="hidden shrink-0 px-3 py-2 md:block lg:hidden" classList={{ "!hidden": props.projectScope }}>
         <HomeUtilityNav
           class="flex"
+          onOpenAgentBoard={props.projects.utility.agentBoard()}
           onOpenSettings={props.projects.utility.settings}
           onOpenHelp={props.projects.utility.help}
           language={props.projects.copy.language}

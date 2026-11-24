@@ -229,6 +229,18 @@ function makeRoutes(
         ),
         ServerInfo.layer(serviceURLs, Context.get(context, Global.Service).tmp, options.app),
       )
+      const agentBoard = options.agentboard
+        ? Layer.unwrap(
+            Effect.gen(function* () {
+              const { agentBoardLayer } = yield* Effect.promise(() => import("./agentboard/http"))
+              return agentBoardLayer(
+                Context.get(context, Database.Service),
+                Context.get(context, Session.Service),
+                { password, username: "opencode" },
+              )
+            }),
+          )
+        : Layer.empty
       const api = HttpApiBuilder.layer(Api, { openapiPath: "/openapi.json" }).pipe(
         Layer.provide(handlers.pipe(Layer.provide(services), Layer.provide(Layer.succeed(CorsConfig, options)))),
         Layer.provide(formLocationLayer),
@@ -239,6 +251,7 @@ function makeRoutes(
         Layer.provide(auth),
         HttpRouter.provideRequest(requestServices),
         Layer.merge(defectResponseLayer),
+        Layer.merge(agentBoard),
         Layer.provideMerge(services),
         Layer.provideMerge(HttpRouter.layer),
         Layer.tap((context) =>

@@ -80,7 +80,7 @@ export const { use: useSettingsSurface, provider: SettingsSurfaceProvider } = cr
       if (projectNavigation() && open())
         return tabs.restoreTab(route)?.server ?? tabs.lastTarget()?.server ?? layout.home.selection().server
 
-      if (route.type === "session") return route.server
+      if (route.type === "session" || route.type === "agentboard") return route.server
 
       if (route.type === "draft")
         return tabs.store.find((item) => item.type === "draft" && item.draftID === route.draftID)?.server

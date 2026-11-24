@@ -827,6 +827,7 @@ export const dict = {
   "common.time.hoursAgo.short": "{{count}}h ago",
   "common.time.daysAgo.short": "{{count}}d ago",
 
+  "sidebar.agentBoard": "AgentBoard",
   "sidebar.settings": "Settings",
   "sidebar.help": "Help",
   "sidebar.inbox.empty": "Sessions you work on will appear here",

@@ -111,6 +111,7 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
           password,
           pty: { handoff },
           simulation: truthy(process.env.OPENCODE_SIMULATE),
+          agentboard: true,
           database: {
             path: databasePath(global.data),
           },

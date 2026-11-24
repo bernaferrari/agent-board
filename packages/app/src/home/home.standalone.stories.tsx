@@ -206,7 +206,7 @@ function HomeStory(props: HomeArgs) {
       <HomeView
         projects={{
           ...navigation,
-          utility: { settings: () => setActivity("Opened settings"), help: () => setActivity("Opened help") },
+          utility: { agentBoard: () => undefined, settings: () => setActivity("Opened settings"), help: () => setActivity("Opened help") },
           project: {
             ...navigation.project,
             openNewSession: home.project.openProjectNewSession,

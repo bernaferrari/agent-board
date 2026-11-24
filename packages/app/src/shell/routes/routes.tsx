@@ -1,3 +1,4 @@
+import { MarkdownProvider } from "@opencode/session-ui/context/markdown"
 import { Route, useParams } from "@solidjs/router"
 import { createMemo, lazy, Show, Suspense, type ParentProps } from "solid-js"
 import { Home } from "@/home/route"
@@ -8,7 +9,7 @@ import { isServerUnauthorized } from "@/runtime/server/health-machine"
 import { SessionPanelFrame, SessionRouteFrame } from "@/session/session-frame"
 import { ServerSignedOutPanel } from "@/session/server-unavailable-panel"
 import { sessionKeyOpen } from "@/shell/state/helpers"
-import { LayoutProvider } from "@/shell/state/layout"
+import { LayoutProvider, useCurrentRoute } from "@/shell/state/layout"
 import { SettingsSurfaceProvider } from "@/settings/surface"
 import Shell from "@/shell/shell"
 import { useTabs } from "@/shell/tabs/tabs"
@@ -18,6 +19,8 @@ import { PluginAttachment } from "@/runtime/plugin/root"
 export const File = lazy(() => import("@opencode/session-ui/file").then((module) => ({ default: module.File })))
 
 const loadSessionRoute = () => Promise.all([import("@/session/route"), File.preload()]).then(([module]) => module)
+
+const AgentBoard = lazy(() => import("@/agentboard"))
 
 const DraftRoute = lazy(() => import("@/new-session/route").then((module) => ({ default: module.DraftRoute })))
 
@@ -74,9 +77,30 @@ export function AppRoutes() {
           </SessionRouteFrame>
         )}
       />
+      <Route path="/server/:serverKey/board/:directory" component={AgentBoardRoute} />
       <Route path="/new-session" component={DraftRoute} />
       {ComponentsLab && <Route path="/components" component={ComponentsLab} />}
     </Route>
+  )
+}
+
+function AgentBoardRoute() {
+  const route = useCurrentRoute()
+  const directory = () => {
+    const current = route()
+    return current.type === "agentboard" ? current.directory : undefined
+  }
+
+  return (
+    <TargetServerRoute>
+      <Show when={directory()} keyed>
+        {(directory) => (
+          <MarkdownProvider codeBlocks={false}>
+            <AgentBoard directory={directory} />
+          </MarkdownProvider>
+        )}
+      </Show>
+    </TargetServerRoute>
   )
 }
 

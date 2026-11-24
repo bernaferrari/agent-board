@@ -1,3 +1,5 @@
+import { useNavigate } from "@solidjs/router"
+import { agentBoardHref } from "@/shell/routes/session"
 import { Show } from "solid-js"
 import { Menu } from "@opencode/ui/menu"
 import { useLanguage } from "@/runtime/i18n/language"
@@ -23,6 +25,7 @@ export function ProjectMenuItems(props: {
   onHideProject: (server: ServerConnection.Any, project: LocalProject) => void
 }) {
   const language = useLanguage()
+  const navigate = useNavigate()
 
   const platform = usePlatform()
 
@@ -30,6 +33,9 @@ export function ProjectMenuItems(props: {
     <>
       <Menu.Item onSelect={() => props.onOpenProjectNewSession(props.server, props.project.worktree)}>
         {language.t("command.session.new")}
+      </Menu.Item>
+      <Menu.Item onSelect={() => navigate(agentBoardHref(ServerConnection.key(props.server), props.project.worktree))}>
+        {language.t("sidebar.agentBoard")}
       </Menu.Item>
       <Show when={props.onViewHistory} keyed>
         {(open) => (

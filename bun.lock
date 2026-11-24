@@ -80,6 +80,7 @@
         "@solidjs/router": "catalog:",
         "@tanstack/solid-query": "5.91.4",
         "@tanstack/solid-virtual": "catalog:",
+        "@thisbeyond/solid-dnd": "0.7.5",
         "effect": "catalog:",
         "fuzzysort": "catalog:",
         "qr-scanner": "1.4.2",
@@ -694,7 +695,10 @@
         "@opencode/schema": "workspace:*",
         "@opencode/simulation": "workspace:*",
         "@opencode/util": "workspace:*",
+        "drizzle-orm": "catalog:",
         "effect": "catalog:",
+        "hono": "catalog:",
+        "zod": "catalog:",
       },
       "devDependencies": {
         "@opencode/client": "workspace:*",
@@ -2450,6 +2454,8 @@
     "@textjs/opencode": ["@textjs/opencode@1.6.1", "", { "bin": { "textjs-opencode": "bin/textjs-opencode.js" } }, "sha512-Axoj9PUXqsDqJ/Zx/IXkTUWdHB9tMjG1ZmfHfiv+nkNedpArmVm4+gMkV98yHFrpQQfgON+wGBe21JsctmcBcg=="],
 
     "@textjs/react": ["@textjs/react@1.6.1", "", { "dependencies": { "@textjs/core": "1.6.1", "react-reconciler": "^0.34.0", "scheduler": "^0.27.0" }, "peerDependencies": { "react": "^19.0.0", "react-dom": "^19.0.0" }, "optionalPeers": ["react-dom"] }, "sha512-iu2GdVulz9oWRr942VCc3uq11WCGxWZpYwtLUWPQuDhgnUU6acWqdA9jRRXXQWxB+W1HBo6aGPnvLFa9f2D/cg=="],
+
+    "@thisbeyond/solid-dnd": ["@thisbeyond/solid-dnd@0.7.5", "", { "peerDependencies": { "solid-js": "^1.5" } }, "sha512-DfI5ff+yYGpK9M21LhYwIPlbP2msKxN2ARwuu6GF8tT1GgNVDTI8VCQvH4TJFoVApP9d44izmAcTh/iTCH2UUw=="],
 
     "@trickfilm400/rollup-plugin-off-main-thread": ["@trickfilm400/rollup-plugin-off-main-thread@3.0.0-pre1", "", { "dependencies": { "ejs": "^3.1.10", "json5": "^2.2.3", "magic-string": "^0.30.21", "string.prototype.matchall": "^4.0.12" } }, "sha512-/67zpWDBLV+oYAEL682s1ktXL0HgqX76f6gaVGkGnVZlBbm1zd0v4Bz8MFF2GGhoX9rvfq3KSQHubFHwa6w6/Q=="],
 

@@ -17,6 +17,7 @@ export const ServerOptions = Schema.Struct({
   password: Schema.optional(Schema.String),
   cors: Schema.optional(Schema.Array(Schema.String)),
   simulation: Schema.optional(Schema.Boolean),
+  agentboard: Schema.optional(Schema.Boolean),
   database: Schema.optional(Database.Options),
   pty: Schema.optional(PersistentPty.Options),
   events: Schema.optional(

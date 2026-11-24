@@ -34,7 +34,10 @@
     "@opencode/schema": "workspace:*",
     "@opencode/simulation": "workspace:*",
     "@opencode/util": "workspace:*",
-    "effect": "catalog:"
+    "drizzle-orm": "catalog:",
+    "effect": "catalog:",
+    "hono": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@opencode/pty": "0.6.0",

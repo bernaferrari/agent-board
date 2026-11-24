@@ -79,6 +79,7 @@ export type HomeProjectsViewProps = {
   onRevealProject: (server: ServerConnection.Any, project: LocalProject) => void
   onClearNotifications: (server: ServerConnection.Any, project: LocalProject) => void
   onHideProject: (server: ServerConnection.Any, project: LocalProject) => void
+  onOpenAgentBoard?: () => void
   onOpenSettings: () => void
   onOpenHelp: () => void
   /** With `dropdown`, opens the panel from a compact picker at the end of Home's search field. */
@@ -364,6 +365,7 @@ function HomeProjectsPanel(props: HomeProjectsViewProps) {
       <HomeUtilityNav
         class="mb-8 mt-4 hidden shrink-0 lg:flex"
         classList={{ "!hidden": !!props.dropdown }}
+        onOpenAgentBoard={props.onOpenAgentBoard}
         onOpenSettings={props.onOpenSettings}
         onOpenHelp={props.onOpenHelp}
         language={props.language}
@@ -375,6 +377,7 @@ function HomeProjectsPanel(props: HomeProjectsViewProps) {
 export function HomeUtilityNav(props: {
   class?: string
   classList?: Record<string, boolean>
+  onOpenAgentBoard?: () => void
   onOpenSettings: () => void
   onOpenHelp: () => void
   language: ReturnType<typeof useLanguage>
@@ -384,6 +387,12 @@ export function HomeUtilityNav(props: {
       class={`${props.class ?? ""} min-w-0 flex-row justify-between gap-1 lg:flex-col lg:justify-start lg:pr-3 [&>button]:w-auto lg:[&>button]:w-full`}
       classList={props.classList}
     >
+      <Show when={props.onOpenAgentBoard}>
+        <HomeProjectNavButton type="button" onClick={props.onOpenAgentBoard}>
+          <Icon name="checklist" />
+          <span class={HOME_PROJECT_NAV_LABEL}>{props.language.t("sidebar.agentBoard")}</span>
+        </HomeProjectNavButton>
+      </Show>
       <HomeProjectNavButton
         type="button"
         class="text-v2-text-text-faint [&>[data-slot=icon-svg]]:text-v2-icon-icon-muted"

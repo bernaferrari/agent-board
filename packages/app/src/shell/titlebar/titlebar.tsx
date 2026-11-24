@@ -338,6 +338,11 @@ export function Titlebar(props: { verticalTabs?: { mount?: HTMLElement } }) {
                   return true
                 }
 
+                case "agentboard":
+                  void tabs.newDraft({ server: route.server, directory: route.directory, draftID })
+
+                  return true
+
                 case "settings":
                 case "connect":
                 case "components":

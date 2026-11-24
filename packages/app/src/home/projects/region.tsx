@@ -52,6 +52,7 @@ export function HomeProjects(props: {
       onRevealProject={props.projects.project.reveal}
       onClearNotifications={props.projects.project.clearNotifications}
       onHideProject={props.projects.project.hide}
+      onOpenAgentBoard={props.projects.utility.agentBoard()}
       onOpenSettings={props.projects.utility.settings}
       onOpenHelp={props.projects.utility.help}
     />

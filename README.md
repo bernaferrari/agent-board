@@ -43,6 +43,10 @@
 
 ---
 
+### AgentBoard
+
+This fork includes a Beads board in OpenCode. See [AgentBoard setup and usage](docs/agentboard.md).
+
 ### Installation
 
 ```bash
